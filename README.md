@@ -1,15 +1,42 @@
 # MiColmena
 
-Plataforma de gestión de tickets de soporte y atención al cliente, construida con Vue 3, Vite y Tailwind CSS.
+Plataforma de gestión de tickets de soporte y atención al cliente.
 
-## Desarrollo
+## Estructura
 
-```bash
-npm install
-npm run dev
+```
+MiColmena/
+├── frontend/                    # Aplicación web (Vue)
+│   ├── public/                  # Archivos servidos tal cual (favicon)
+│   ├── src/
+│   │   ├── assets/
+│   │   │   ├── icons/           # Iconos del menú lateral
+│   │   │   └── images/          # Logo y otras imágenes
+│   │   ├── components/
+│   │   │   └── layout/          # AppNavbar, AppSidebar
+│   │   ├── router/              # Rutas de la aplicación
+│   │   ├── services/            # Cliente de la API (api.js)
+│   │   ├── styles/              # CSS global (Tailwind)
+│   │   ├── views/               # Páginas: HomeView, DashboardView
+│   │   ├── App.vue
+│   │   └── main.js
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
+├── backend/                     # API (Go)
+│   ├── cmd/api/                 # Punto de entrada del servidor
+│   ├── internal/
+│   │   ├── api/                 # Rutas y handlers HTTP
+│   │   ├── auth/                # Contraseñas y tokens JWT
+│   │   ├── config/              # Variables de entorno
+│   │   └── db/                  # Conexión y migraciones SQL
+│   ├── Dockerfile
+│   └── go.mod
+├── docker-compose.yml           # PostgreSQL + API
+└── README.md
 ```
 
-## Arquitectura
+## Tecnologías
 
 | Parte | Tecnología |
 |---|---|
@@ -18,14 +45,12 @@ npm run dev
 | Base de datos | PostgreSQL 16 |
 | Autenticación | JWT + contraseñas con bcrypt |
 
-```
-backend/
-├── cmd/api/main.go         # Arranque, migraciones y administrador inicial
-├── internal/config/        # Variables de entorno
-├── internal/db/            # Pool de conexiones y migraciones SQL (embebidas)
-├── internal/auth/          # Contraseñas y tokens
-└── internal/api/           # Rutas y handlers HTTP
-src/api.js                  # Cliente de la API para el frontend
+## Levantar el frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
 ## Levantar el backend
@@ -49,7 +74,7 @@ go run ./cmd/api
 ```
 
 Las migraciones se aplican solas al arrancar. Con el backend en `:8080`, `npm run dev`
-redirige `/api` hacia él.
+(en `frontend/`) redirige `/api` hacia él.
 
 ## API
 

@@ -1,35 +1,35 @@
 <template>
   <div class="w-16 bg-secondary text-secondary-foreground flex flex-col items-center py-4 space-y-4">
-    <img src="/src/assets/imagen_2024-06-25_022820759-removebg-preview.png" alt="Logo" class="w-10 h-10 rounded-full">
+    <img src="@/assets/images/logo.png" alt="Logo" class="w-10 h-10 rounded-full">
 
 
     <button class="icon-button">
-      <img src="/src/assets/icon-ticket.png" alt="Tickets" class="icon-image">
+      <img src="@/assets/icons/ticket.png" alt="Tickets" class="icon-image">
     </button>
     <button class="icon-button">
-      <img src="/src/assets/icon-communication.png" alt="Communication" class="icon-image">
+      <img src="@/assets/icons/communication.png" alt="Communication" class="icon-image">
     </button>
     <button class="icon-button">
-      <img src="/src/assets/icon-knowledge-base.png" alt="Knowledge Base" class="icon-image">
+      <img src="@/assets/icons/knowledge-base.png" alt="Knowledge Base" class="icon-image">
     </button>
     <button class="icon-button">
-      <img src="/src/assets/icon-dashboard.png" alt="Dashboard" class="icon-image">
+      <img src="@/assets/icons/dashboard.png" alt="Dashboard" class="icon-image">
     </button>
     <button class="icon-button">
-      <img src="/src/assets/icon-settings.png" alt="Settings" class="icon-image">
+      <img src="@/assets/icons/settings.png" alt="Settings" class="icon-image">
     </button>
     <button class="icon-button">
-      <img src="/src/assets/icon-report.png" alt="Reports" class="icon-image">
+      <img src="@/assets/icons/report.png" alt="Reports" class="icon-image">
     </button>
     <button class="icon-button">
-      <img src="/src/assets/icon-help.png" alt="Help" class="icon-image">
+      <img src="@/assets/icons/help.png" alt="Help" class="icon-image">
     </button>
   </div>
 </template>
 
 <script>
 export default {
-  name: 'Sidebar'
+  name: 'AppSidebar'
 };
 </script>
 

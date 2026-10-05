@@ -1,9 +1,9 @@
 <template>
     <div class="flex h-screen">
-      <Sidebar />
+      <AppSidebar />
       
       <div class="flex-1 flex flex-col">
-        <Navbar />
+        <AppNavbar />
         
         <div class="flex-1 p-4 overflow-y-auto">
           <div class="flex items-center justify-between mb-4">
@@ -63,14 +63,14 @@
   </template>
   
   <script>
-  import Navbar from '@/components/Navbar.vue';
-  import Sidebar from '@/components/Sidebar.vue';
+  import AppNavbar from '@/components/layout/AppNavbar.vue';
+  import AppSidebar from '@/components/layout/AppSidebar.vue';
   
   export default {
-    name: 'Home',
+    name: 'DashboardView',
     components: {
-      Navbar,
-      Sidebar
+      AppNavbar,
+      AppSidebar
     }
   };
   </script>
