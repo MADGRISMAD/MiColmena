@@ -6,23 +6,11 @@ Plataforma de gestión de tickets de soporte y atención al cliente.
 
 ```
 MiColmena/
-├── frontend/                    # Aplicación web (Vue)
-│   ├── public/                  # Archivos servidos tal cual (favicon)
-│   ├── src/
-│   │   ├── assets/
-│   │   │   ├── icons/           # Iconos del menú lateral
-│   │   │   └── images/          # Logo y otras imágenes
-│   │   ├── components/
-│   │   │   └── layout/          # AppNavbar, AppSidebar
-│   │   ├── router/              # Rutas de la aplicación
-│   │   ├── services/            # Cliente de la API (api.js)
-│   │   ├── styles/              # CSS global (Tailwind)
-│   │   ├── views/               # Páginas: HomeView, DashboardView
-│   │   ├── App.vue
-│   │   └── main.js
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
+├── frontend/                    # Aplicación web (SvelteKit)
+│   ├── src/lib/                 # Cliente de la API, stores, esquemas, componentes
+│   ├── src/routes/              # Páginas: portada, login, registro, dashboard, tickets
+│   ├── e2e/                     # Pruebas Playwright
+│   └── README.md                # Detalles del frontend
 ├── backend/                     # API (Go)
 │   ├── cmd/api/                 # Punto de entrada del servidor
 │   ├── internal/
@@ -40,18 +28,25 @@ MiColmena/
 
 | Parte | Tecnología |
 |---|---|
-| Frontend | Vue 3, Vue Router, Vite, Tailwind CSS |
+| Frontend | SvelteKit 3 (SPA estática), Svelte 5, TypeScript, Tailwind CSS 4, shadcn-svelte |
+| Formularios y estado | Superforms + Zod, Svelte stores |
+| Pruebas del frontend | Vitest (unitarias), Playwright (E2E) |
 | Backend | Go (`net/http` de la biblioteca estándar), `pgx` |
 | Base de datos | PostgreSQL 16 |
 | Autenticación | JWT + contraseñas con bcrypt |
 
 ## Levantar el frontend
 
+Requiere Node.js 22+ y npm 11+ (`npm install -g npm@11`).
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+
+Abre http://localhost:5173. Las llamadas a `/api` van al backend en `:8080`.
+Más detalles en [`frontend/README.md`](frontend/README.md).
 
 ## Levantar el backend
 
@@ -73,8 +68,7 @@ set -a; . ./.env; set +a
 go run ./cmd/api
 ```
 
-Las migraciones se aplican solas al arrancar. Con el backend en `:8080`, `npm run dev`
-(en `frontend/`) redirige `/api` hacia él.
+Las migraciones se aplican solas al arrancar.
 
 ## API
 
