@@ -1,0 +1,37 @@
+# Levanta PostgreSQL y la API: docker compose up -d
+# Para producción, define JWT_SECRET, POSTGRES_PASSWORD y ADMIN_* en un archivo .env junto a este.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: micolmena
+      POSTGRES_USER: micolmena
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-micolmena}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U micolmena -d micolmena"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://micolmena:${POSTGRES_PASSWORD:-micolmena}@db:5432/micolmena?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?define JWT_SECRET en .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

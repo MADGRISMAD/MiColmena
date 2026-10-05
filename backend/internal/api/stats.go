@@ -1,0 +1,72 @@
+package api
+
+import (
+	"net/http"
+)
+
+type statsResponse struct {
+	ByStatus   map[string]int `json:"by_status"`
+	OpenByPrio map[string]int `json:"open_by_priority"`
+	Unassigned int            `json:"unassigned_open"`
+	// Horas promedio entre la creación y la resolución, en los últimos 30 días.
+	AvgResolutionHours *float64 `json:"avg_resolution_hours_30d"`
+}
+
+// stats calcula los números del dashboard en una sola consulta.
+func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
+	resp := statsResponse{
+		ByStatus:   map[string]int{},
+		OpenByPrio: map[string]int{},
+	}
+	for _, st := range ticketStatuses {
+		resp.ByStatus[st] = 0
+	}
+	for _, p := range ticketPriorities {
+		resp.OpenByPrio[p] = 0
+	}
+
+	rows, err := s.db.Query(r.Context(), `
+		SELECT 'status' AS kind, status AS key, count(*) FROM tickets GROUP BY status
+		UNION ALL
+		SELECT 'priority', priority, count(*) FROM tickets
+		WHERE status NOT IN ('resolved', 'closed') GROUP BY priority
+		UNION ALL
+		SELECT 'unassigned', '', count(*) FROM tickets
+		WHERE assignee_id IS NULL AND status NOT IN ('resolved', 'closed')`)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var kind, key string
+		var n int
+		if err := rows.Scan(&kind, &key, &n); err != nil {
+			internalError(w, err)
+			return
+		}
+		switch kind {
+		case "status":
+			resp.ByStatus[key] = n
+		case "priority":
+			resp.OpenByPrio[key] = n
+		case "unassigned":
+			resp.Unassigned = n
+		}
+	}
+	if err := rows.Err(); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	if err := s.db.QueryRow(r.Context(), `
+		SELECT avg(extract(epoch FROM resolved_at - created_at) / 3600)
+		FROM tickets
+		WHERE resolved_at > now() - interval '30 days'`,
+	).Scan(&resp.AvgResolutionHours); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
