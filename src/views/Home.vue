@@ -7,9 +7,9 @@
       
       <div class="flex-1 p-6 overflow-y-auto">
         <div class="container mx-auto">
-          <h1 class="text-4xl font-bold mb-6 text-gray-900">Bienvenido a BeeHive.Support</h1>
+          <h1 class="text-4xl font-bold mb-6 text-gray-900">Bienvenido a MiColmena</h1>
           <p class="text-xl text-gray-600 mb-8">
-            BeeHive.Support es una plataforma integral para gestionar tickets de soporte y atención al cliente.
+            MiColmena es una plataforma integral para gestionar tickets de soporte y atención al cliente.
             Organiza y gestiona tus tickets de manera eficiente y mejora la experiencia de tus usuarios.
           </p>
           
@@ -22,7 +22,7 @@
             </router-link>
           </div>
           
-          <h2 class="text-3xl font-semibold mb-6 text-gray-900">Pon la IA a tu servicio con BeeHive.Support</h2>
+          <h2 class="text-3xl font-semibold mb-6 text-gray-900">Pon la IA a tu servicio con MiColmena</h2>
           <p class="text-lg text-gray-600 mb-8">
             Descubre cómo nuestra plataforma de IA combina tecnología tradicional y nueva para que tus equipos trabajen en lo que realmente importa.
           </p>
@@ -96,7 +96,7 @@
           
           <h2 class="text-3xl font-semibold mb-6 text-gray-900">Haz que la IA trabaje al servicio de las personas</h2>
           <p class="text-lg text-gray-600 mb-8">
-            BeeHive.Support lleva la IA a todos los rincones de tu negocio, lo que permite que tu personal sea más productivo, más receptivo y más innovador.
+            MiColmena lleva la IA a todos los rincones de tu negocio, lo que permite que tu personal sea más productivo, más receptivo y más innovador.
           </p>
           <div class="flex justify-center space-x-4 mb-8">
             <a href="#" class="text-blue-600 underline">Descubrir cómo</a>
@@ -121,18 +121,18 @@
           </div>
           
           <div class="flex justify-between items-center mb-8">
-            <h2 class="text-3xl font-semibold text-gray-900">Novedades en BeeHive.Support</h2>
+            <h2 class="text-3xl font-semibold text-gray-900">Novedades en MiColmena</h2>
             <a href="#" class="text-blue-600 underline">Ver todas las noticias</a>
           </div>
           <div class="space-y-4">
             <div class="bg-gray-50 text-gray-900 p-6 rounded-lg shadow-md">
               <h3 class="text-2xl font-semibold mb-4">Ganancias del primer trimestre de 2024</h3>
-              <p class="text-lg mb-4">BeeHive.Support anuncia sus resultados financieros para el primer trimestre de 2024.</p>
+              <p class="text-lg mb-4">MiColmena anuncia sus resultados financieros para el primer trimestre de 2024.</p>
               <a href="#" class="text-blue-600 underline">Leer comunicado de prensa</a>
             </div>
             <div class="bg-gray-50 text-gray-900 p-6 rounded-lg shadow-md">
-              <h3 class="text-2xl font-semibold mb-4">BeeHive.Support amplía su liderazgo en GenAI con su último lanzamiento</h3>
-              <p class="text-lg mb-4">Las mejoras de Now Assist y BeeHive.Support Impact AI Accelerators mejoran la productividad y aumentan el valor de las inversiones en IA.</p>
+              <h3 class="text-2xl font-semibold mb-4">MiColmena amplía su liderazgo en GenAI con su último lanzamiento</h3>
+              <p class="text-lg mb-4">Las mejoras de Now Assist y MiColmena Impact AI Accelerators mejoran la productividad y aumentan el valor de las inversiones en IA.</p>
               <a href="#" class="text-blue-600 underline">Leer el comunicado de prensa</a>
             </div>
             <div class="bg-gray-50 text-gray-900 p-6 rounded-lg shadow-md">
@@ -147,8 +147,8 @@
             <a href="#" class="text-blue-600 underline">Obtener el informe</a>
           </div>
           <div class="bg-gray-50 text-gray-900 p-6 rounded-lg shadow-md mt-4">
-            <h3 class="text-2xl font-semibold mb-4">BeeHive.Support, líder en Forrester Wave™ para GRC</h3>
-            <p class="text-lg mb-4">Descubre por qué se nombró a BeeHive.Support líder en The Forrester Wave™: Governance, Risk, and Compliance Platforms, Q4, 2023.</p>
+            <h3 class="text-2xl font-semibold mb-4">MiColmena, líder en Forrester Wave™ para GRC</h3>
+            <p class="text-lg mb-4">Descubre por qué se nombró a MiColmena líder en The Forrester Wave™: Governance, Risk, and Compliance Platforms, Q4, 2023.</p>
             <a href="#" class="text-blue-600 underline">Obtener el informe</a>
           </div>
           
@@ -163,7 +163,7 @@
           </div>
           
           <div class="flex justify-center mt-8">
-            <a href="#" class="text-blue-600 underline">Obtén las últimas actualizaciones de BeeHive.Support</a>
+            <a href="#" class="text-blue-600 underline">Obtén las últimas actualizaciones de MiColmena</a>
           </div>
           <div class="flex justify-center mt-4">
             <input type="email" placeholder="Correo electrónico" class="p-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:border-blue-500">
@@ -189,7 +189,7 @@
                 <h4 class="text-lg font-semibold mb-4 text-gray-900">Recursos</h4>
                 <ul class="text-gray-600">
                   <li><a href="#" class="hover:underline">Casos de clientes</a></li>
-                  <li><a href="#" class="hover:underline">Investigación de BeeHive.Support</a></li>
+                  <li><a href="#" class="hover:underline">Investigación de MiColmena</a></li>
                   <li><a href="#" class="hover:underline">Formación y certificación</a></li>
                   <li><a href="#" class="hover:underline">Comunidad de usuarios</a></li>
                   <li><a href="#" class="hover:underline">Portal del desarrollador</a></li>
@@ -213,7 +213,7 @@
               </div>
             </div>
             <div class="mt-8 text-gray-600 text-center">
-              <p>&copy; 2024 BeeHive.Support. Todos los derechos reservados.</p>
+              <p>&copy; 2024 MiColmena. Todos los derechos reservados.</p>
               <ul class="flex justify-center space-x-4 mt-4">
                 <li><a href="#" class="hover:underline">Términos y condiciones</a></li>
                 <li><a href="#" class="hover:underline">RGPD</a></li>
