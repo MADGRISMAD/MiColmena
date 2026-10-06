@@ -28,6 +28,11 @@ services:
       DATABASE_URL: postgres://micolmena:${POSTGRES_PASSWORD:-micolmena}@db:5432/micolmena?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:?define JWT_SECRET en .env}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      # Activa TRUST_PROXY solo cuando pongas un proxy (Caddy) delante de la API.
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      AUTH_RATE_PER_MIN: ${AUTH_RATE_PER_MIN:-10}
+      LOGIN_MAX_FAILURES: ${LOGIN_MAX_FAILURES:-5}
+      LOGIN_LOCKOUT: ${LOGIN_LOCKOUT:-15m}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     ports:

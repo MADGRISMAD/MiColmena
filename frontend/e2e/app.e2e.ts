@@ -41,6 +41,23 @@ test('el login valida en el navegador y muestra el error del servidor', async ({
 	await expect(page.getByText('email o contraseña incorrectos')).toBeVisible();
 });
 
+test('el login muestra el aviso cuando el servidor limita los intentos', async ({ page }) => {
+	const message = 'demasiados intentos, inténtalo de nuevo en 15 minutos';
+	await page.route('**/api/auth/login', (route) =>
+		route.fulfill({ status: 429, headers: { 'Retry-After': '900' }, json: { error: message } })
+	);
+
+	await page.goto('/login');
+	await page.getByLabel('Email').fill(users.agent.email);
+	await page.getByLabel('Contraseña').fill('secreto123');
+	await page.getByRole('button', { name: 'Entrar' }).click();
+
+	await expect(page.getByText(message)).toBeVisible();
+	await expect(page).toHaveURL('/login');
+	// Se puede volver a intentarlo: el botón no queda bloqueado.
+	await expect(page.getByRole('button', { name: 'Entrar' })).toBeEnabled();
+});
+
 test('el agente entra al dashboard con las estadísticas', async ({ page }) => {
 	await page.goto('/login');
 	await page.getByLabel('Email').fill(users.agent.email);

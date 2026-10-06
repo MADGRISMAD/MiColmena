@@ -50,8 +50,14 @@ func run() error {
 	}
 
 	srv := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           api.NewServer(pool, auth.NewIssuer(cfg.JWTSecret, cfg.TokenTTL), cfg.CORSOrigins).Handler(),
+		Addr: cfg.Addr,
+		Handler: api.NewServer(pool, auth.NewIssuer(cfg.JWTSecret, cfg.TokenTTL), api.Options{
+			CORSOrigins:      cfg.CORSOrigins,
+			TrustProxy:       cfg.TrustProxy,
+			AuthRatePerMin:   cfg.AuthRatePerMin,
+			LoginMaxFailures: cfg.LoginMaxFailures,
+			LoginLockout:     cfg.LoginLockout,
+		}).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

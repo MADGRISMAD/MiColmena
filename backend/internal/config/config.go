@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -16,6 +17,13 @@ type Config struct {
 	CORSOrigins   []string
 	AdminEmail    string
 	AdminPassword string
+
+	// TrustProxy: la API corre detrás de un proxy de confianza que añade la IP real al final
+	// de X-Forwarded-For. Solo debe activarse si de verdad es así.
+	TrustProxy       bool
+	AuthRatePerMin   int
+	LoginMaxFailures int
+	LoginLockout     time.Duration
 }
 
 func Load() (Config, error) {
@@ -34,6 +42,19 @@ func Load() (Config, error) {
 	}
 	cfg.TokenTTL = ttl
 
+	if cfg.TrustProxy, err = strconv.ParseBool(env("TRUST_PROXY", "false")); err != nil {
+		return cfg, errors.New("TRUST_PROXY inválido: usa true o false")
+	}
+	if cfg.AuthRatePerMin, err = positiveInt("AUTH_RATE_PER_MIN", 10); err != nil {
+		return cfg, err
+	}
+	if cfg.LoginMaxFailures, err = positiveInt("LOGIN_MAX_FAILURES", 5); err != nil {
+		return cfg, err
+	}
+	if cfg.LoginLockout, err = time.ParseDuration(env("LOGIN_LOCKOUT", "15m")); err != nil || cfg.LoginLockout <= 0 {
+		return cfg, errors.New("LOGIN_LOCKOUT inválido: usa una duración como 15m")
+	}
+
 	if cfg.DatabaseURL == "" {
 		return cfg, errors.New("falta DATABASE_URL")
 	}
@@ -48,6 +69,14 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func positiveInt(key string, fallback int) (int, error) {
+	n, err := strconv.Atoi(env(key, strconv.Itoa(fallback)))
+	if err != nil || n < 1 {
+		return 0, errors.New(key + " inválido: debe ser un número entero mayor que 0")
+	}
+	return n, nil
 }
 
 func splitList(s string) []string {

@@ -60,6 +60,20 @@ describe('createApiClient', () => {
 		expect(err.fields).toEqual({ email: 'no es un email válido' });
 	});
 
+	it('un 429 es un error normal: muestra el mensaje y no cierra la sesión', async () => {
+		const onUnauthorized = vi.fn();
+		const message = 'demasiados intentos, inténtalo de nuevo en 15 minutos';
+		const fetch = vi.fn().mockResolvedValue(jsonResponse(429, { error: message }));
+		const api = createApiClient({ fetch, onUnauthorized });
+
+		const err = await api.login('ana@x.com', 'secreto123').catch((e) => e);
+
+		expect(err).toBeInstanceOf(ApiError);
+		expect(err.status).toBe(429);
+		expect(err.message).toBe(message);
+		expect(onUnauthorized).not.toHaveBeenCalled();
+	});
+
 	it('avisa de 401 para cerrar la sesión', async () => {
 		const onUnauthorized = vi.fn();
 		const fetch = vi.fn().mockResolvedValue(jsonResponse(401, { error: 'token inválido' }));

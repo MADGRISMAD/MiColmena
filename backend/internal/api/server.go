@@ -4,9 +4,12 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,16 +17,52 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/MADGRISMAD/MiColmena/backend/internal/auth"
+	"github.com/MADGRISMAD/MiColmena/backend/internal/ratelimit"
 )
+
+// Options configura el servidor. Los valores en cero usan los valores por defecto.
+type Options struct {
+	// CORSOrigins son los orígenes del frontend permitidos ("*" permite cualquiera).
+	CORSOrigins []string
+	// TrustProxy indica que la API corre detrás de un proxy de confianza (Caddy, Nginx…)
+	// que añade la IP real del cliente al final de X-Forwarded-For. Con false esa cabecera
+	// se ignora, porque cualquiera podría falsificarla para esquivar el límite de intentos.
+	TrustProxy bool
+	// AuthRatePerMin son los intentos por minuto y por IP en /api/auth/*. Por defecto 10.
+	AuthRatePerMin int
+	// LoginMaxFailures son los fallos seguidos de un mismo email que lo bloquean. Por defecto 5.
+	LoginMaxFailures int
+	// LoginLockout es lo que dura ese bloqueo. Por defecto 15 minutos.
+	LoginLockout time.Duration
+}
 
 type Server struct {
 	db          *pgxpool.Pool
 	tokens      *auth.Issuer
 	corsOrigins []string
+	trustProxy  bool
+	authLimit   *ratelimit.Limiter
+	loginLock   *ratelimit.Lockout
 }
 
-func NewServer(db *pgxpool.Pool, tokens *auth.Issuer, corsOrigins []string) *Server {
-	return &Server{db: db, tokens: tokens, corsOrigins: corsOrigins}
+func NewServer(db *pgxpool.Pool, tokens *auth.Issuer, opts Options) *Server {
+	if opts.AuthRatePerMin == 0 {
+		opts.AuthRatePerMin = 10
+	}
+	if opts.LoginMaxFailures == 0 {
+		opts.LoginMaxFailures = 5
+	}
+	if opts.LoginLockout == 0 {
+		opts.LoginLockout = 15 * time.Minute
+	}
+	return &Server{
+		db:          db,
+		tokens:      tokens,
+		corsOrigins: opts.CORSOrigins,
+		trustProxy:  opts.TrustProxy,
+		authLimit:   ratelimit.New(opts.AuthRatePerMin),
+		loginLock:   ratelimit.NewLockout(opts.LoginMaxFailures, opts.LoginLockout),
+	}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -31,8 +70,8 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/health", s.health)
 
-	mux.HandleFunc("POST /api/auth/register", s.register)
-	mux.HandleFunc("POST /api/auth/login", s.login)
+	mux.Handle("POST /api/auth/register", s.limitAuth(s.register))
+	mux.Handle("POST /api/auth/login", s.limitAuth(s.login))
 	mux.Handle("GET /api/me", s.authed(s.me))
 
 	mux.Handle("GET /api/tickets", s.authed(s.listTickets))
@@ -60,6 +99,67 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Middleware ---
+
+// limitAuth limita los intentos por IP en las rutas de registro y login.
+func (s *Server) limitAuth(next http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ok, retry := s.authLimit.Allow(clientIP(r, s.trustProxy))
+		if !ok {
+			tooManyRequests(w, retry)
+			return
+		}
+		next(w, r)
+	})
+}
+
+// tooManyRequests responde 429 con Retry-After (en segundos, redondeado hacia arriba).
+func tooManyRequests(w http.ResponseWriter, retry time.Duration) {
+	seconds := int((retry + time.Second - 1) / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+	writeError(w, http.StatusTooManyRequests,
+		fmt.Sprintf("demasiados intentos, inténtalo de nuevo en %s", waitText(seconds)))
+}
+
+func waitText(seconds int) string {
+	if seconds == 1 {
+		return "1 segundo"
+	}
+	if seconds < 90 {
+		return fmt.Sprintf("%d segundos", seconds)
+	}
+	return fmt.Sprintf("%d minutos", (seconds+59)/60)
+}
+
+// clientIP devuelve la IP del cliente usada como clave del límite. Las IPv6 se agrupan por /64,
+// porque una sola persona suele tener un bloque entero y podría rotar de dirección dentro de él.
+func clientIP(r *http.Request, trustProxy bool) string {
+	raw := ""
+	if trustProxy {
+		// El proxy de confianza añade la IP real al final; lo que venga antes lo pone el cliente.
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			raw = strings.TrimSpace(parts[len(parts)-1])
+		}
+	}
+	if net.ParseIP(raw) == nil {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		raw = host
+	}
+	ip := net.ParseIP(raw)
+	if ip == nil {
+		return raw
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String()
+	}
+	return ip.Mask(net.CIDRMask(64, 128)).String() + "/64"
+}
 
 type claimsKey struct{}
 

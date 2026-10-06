@@ -91,6 +91,14 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// El bloqueo es por el email que se escribe, exista o no la cuenta, para no revelar cuáles existen.
+	// Mientras dura, ni siquiera la contraseña correcta entra: así el bloqueo frena de verdad la fuerza bruta.
+	key := strings.ToLower(strings.TrimSpace(in.Email))
+	if locked, retry := s.loginLock.Locked(key); locked {
+		tooManyRequests(w, retry)
+		return
+	}
+
 	var u User
 	var hash string
 	err := s.db.QueryRow(r.Context(), `
@@ -102,10 +110,12 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil || !auth.CheckPassword(hash, in.Password) {
+		s.loginLock.Fail(key)
 		writeError(w, http.StatusUnauthorized, "email o contraseña incorrectos")
 		return
 	}
 
+	s.loginLock.Reset(key)
 	s.respondWithToken(w, http.StatusOK, u)
 }
 
