@@ -28,6 +28,15 @@ type Config struct {
 	// Adjuntos: carpeta donde se guardan y tamaño máximo de cada archivo.
 	UploadDir      string
 	MaxUploadBytes int64
+
+	// AppURL es la dirección del frontend, para los enlaces de los correos.
+	AppURL string
+	// Correo saliente. Sin SMTPHost, los correos solo se escriben en el log.
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
 }
 
 func Load() (Config, error) {
@@ -39,6 +48,11 @@ func Load() (Config, error) {
 		AdminEmail:    os.Getenv("ADMIN_EMAIL"),
 		AdminPassword: os.Getenv("ADMIN_PASSWORD"),
 		UploadDir:     env("UPLOAD_DIR", "data/uploads"),
+		AppURL:        strings.TrimSuffix(env("APP_URL", "http://localhost:5173"), "/"),
+		SMTPHost:      os.Getenv("SMTP_HOST"),
+		SMTPUsername:  os.Getenv("SMTP_USERNAME"),
+		SMTPPassword:  os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:      env("SMTP_FROM", "MiColmena <no-reply@localhost>"),
 	}
 
 	ttl, err := time.ParseDuration(env("TOKEN_TTL", "24h"))
@@ -65,6 +79,10 @@ func Load() (Config, error) {
 		return cfg, err
 	}
 	cfg.MaxUploadBytes = int64(maxMB) << 20
+
+	if cfg.SMTPPort, err = positiveInt("SMTP_PORT", 587); err != nil {
+		return cfg, err
+	}
 
 	if cfg.DatabaseURL == "" {
 		return cfg, errors.New("falta DATABASE_URL")

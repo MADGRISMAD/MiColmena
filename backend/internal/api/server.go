@@ -38,6 +38,8 @@ type Options struct {
 	UploadDir string
 	// MaxUploadBytes es el tamaño máximo de cada adjunto. Por defecto 10 MB.
 	MaxUploadBytes int64
+	// AppURL es la dirección del frontend, para los enlaces de los correos. Por defecto http://localhost:5173.
+	AppURL string
 }
 
 type Server struct {
@@ -49,6 +51,8 @@ type Server struct {
 	loginLock   *ratelimit.Lockout
 	uploadDir   string
 	maxUpload   int64
+	appURL      string
+	broker      *broker
 }
 
 func NewServer(db *pgxpool.Pool, tokens *auth.Issuer, opts Options) *Server {
@@ -67,6 +71,9 @@ func NewServer(db *pgxpool.Pool, tokens *auth.Issuer, opts Options) *Server {
 	if opts.MaxUploadBytes == 0 {
 		opts.MaxUploadBytes = 10 << 20
 	}
+	if opts.AppURL == "" {
+		opts.AppURL = "http://localhost:5173"
+	}
 	return &Server{
 		db:          db,
 		tokens:      tokens,
@@ -76,6 +83,8 @@ func NewServer(db *pgxpool.Pool, tokens *auth.Issuer, opts Options) *Server {
 		loginLock:   ratelimit.NewLockout(opts.LoginMaxFailures, opts.LoginLockout),
 		uploadDir:   opts.UploadDir,
 		maxUpload:   opts.MaxUploadBytes,
+		appURL:      strings.TrimSuffix(opts.AppURL, "/"),
+		broker:      newBroker(),
 	}
 }
 
@@ -86,9 +95,14 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("POST /api/auth/register", s.limitAuth(s.register))
 	mux.Handle("POST /api/auth/login", s.limitAuth(s.login))
+	mux.Handle("POST /api/auth/forgot", s.limitAuth(s.forgotPassword))
+	mux.Handle("POST /api/auth/reset", s.limitAuth(s.resetPassword))
 	mux.Handle("GET /api/me", s.authed(s.me))
 	mux.Handle("PATCH /api/me", s.authed(s.updateMe))
 	mux.Handle("POST /api/me/password", s.authed(s.changePassword))
+	mux.Handle("GET /api/notifications", s.authed(s.listNotifications))
+	mux.Handle("POST /api/notifications/read", s.authed(s.readNotifications))
+	mux.Handle("GET /api/stream", s.authed(s.stream))
 
 	mux.Handle("GET /api/tickets", s.authed(s.listTickets))
 	mux.Handle("POST /api/tickets", s.authed(s.createTicket))
@@ -286,6 +300,9 @@ type statusRecorder struct {
 	http.ResponseWriter
 	status int
 }
+
+// Unwrap deja que http.ResponseController llegue a la conexión (Flush, plazos de lectura y escritura).
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code

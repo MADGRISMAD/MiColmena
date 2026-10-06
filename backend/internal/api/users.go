@@ -14,19 +14,21 @@ import (
 )
 
 type User struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	Role      string    `json:"role"`
-	Active    bool      `json:"active"`
-	CreatedAt time.Time `json:"created_at"`
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Email  string `json:"email"`
+	Role   string `json:"role"`
+	Active bool   `json:"active"`
+	// EmailNotifications: además de la campana, recibir avisos por correo.
+	EmailNotifications bool      `json:"email_notifications"`
+	CreatedAt          time.Time `json:"created_at"`
 }
 
-const userColumns = `id, name, email, role, active, created_at`
+const userColumns = `id, name, email, role, active, email_notifications, created_at`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.EmailNotifications, &u.CreatedAt)
 	return u, err
 }
 
@@ -102,7 +104,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	err := s.db.QueryRow(r.Context(), `
 		SELECT `+userColumns+`, password_hash FROM users WHERE lower(email) = lower($1)`,
 		strings.TrimSpace(in.Email),
-	).Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.CreatedAt, &hash)
+	).Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.EmailNotifications, &u.CreatedAt, &hash)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		internalError(w, err)
 		return
@@ -390,9 +392,10 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 // updateMe cambia el nombre o el email de la propia cuenta. Cambiar el email pide la contraseña actual.
 func (s *Server) updateMe(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Name            *string `json:"name"`
-		Email           *string `json:"email"`
-		CurrentPassword string  `json:"current_password"`
+		Name               *string `json:"name"`
+		Email              *string `json:"email"`
+		CurrentPassword    string  `json:"current_password"`
+		EmailNotifications *bool   `json:"email_notifications"`
 	}
 	if !decodeJSON(w, r, &in) {
 		return
@@ -426,9 +429,10 @@ func (s *Server) updateMe(w http.ResponseWriter, r *http.Request) {
 	u, err := scanUser(s.db.QueryRow(r.Context(), `
 		UPDATE users SET
 			name  = CASE WHEN $2 = '' THEN name ELSE $2 END,
-			email = CASE WHEN $3 = '' THEN email ELSE $3 END
+			email = CASE WHEN $3 = '' THEN email ELSE $3 END,
+			email_notifications = coalesce($4, email_notifications)
 		WHERE id = $1
-		RETURNING `+userColumns, id, name, email))
+		RETURNING `+userColumns, id, name, email, in.EmailNotifications))
 	if isUniqueViolation(err) {
 		validationErrors{"email": "ese email ya está registrado"}.write(w)
 		return

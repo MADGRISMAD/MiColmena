@@ -17,6 +17,7 @@ import (
 	"github.com/MADGRISMAD/MiColmena/backend/internal/auth"
 	"github.com/MADGRISMAD/MiColmena/backend/internal/config"
 	"github.com/MADGRISMAD/MiColmena/backend/internal/db"
+	"github.com/MADGRISMAD/MiColmena/backend/internal/mail"
 )
 
 func main() {
@@ -49,6 +50,19 @@ func run() error {
 		return err
 	}
 
+	// Envía en segundo plano los correos que la API deja en la cola.
+	var sender mail.Sender = mail.LogSender{}
+	if cfg.SMTPHost != "" {
+		sender = mail.SMTPSender{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort,
+			Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom,
+		}
+		slog.Info("correo saliente por SMTP", "host", cfg.SMTPHost, "port", cfg.SMTPPort)
+	} else {
+		slog.Warn("SMTP_HOST no está definido: los correos solo se escriben en el log")
+	}
+	go mail.Worker{DB: pool, Sender: sender}.Run(ctx)
+
 	srv := &http.Server{
 		Addr: cfg.Addr,
 		Handler: api.NewServer(pool, auth.NewIssuer(cfg.JWTSecret, cfg.TokenTTL), api.Options{
@@ -59,6 +73,7 @@ func run() error {
 			LoginLockout:     cfg.LoginLockout,
 			UploadDir:        cfg.UploadDir,
 			MaxUploadBytes:   cfg.MaxUploadBytes,
+			AppURL:           cfg.AppURL,
 		}).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

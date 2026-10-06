@@ -312,10 +312,17 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	var out fanout
+	out.ticket(t, false)
+	if err := s.notifyNewTicket(r.Context(), tx, &out, claims.UserID(), t); err != nil {
+		internalError(w, err)
+		return
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		internalError(w, err)
 		return
 	}
+	s.broker.publish(out)
 	writeJSON(w, http.StatusCreated, t)
 }
 
@@ -502,10 +509,17 @@ func (s *Server) updateTicket(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	var out fanout
+	out.ticket(updated, false)
+	if err := s.notifyChanges(r.Context(), tx, &out, claims.UserID(), current, updated); err != nil {
+		internalError(w, err)
+		return
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		internalError(w, err)
 		return
 	}
+	s.broker.publish(out)
 	writeJSON(w, http.StatusOK, updated)
 }
 
@@ -555,6 +569,7 @@ func (s *Server) bulkUpdateTickets(w http.ResponseWriter, r *http.Request) {
 	slices.Sort(ids) // Mismo orden de bloqueo en todas las peticiones: evita interbloqueos.
 	ids = slices.Compact(ids)
 	updated := 0
+	var out fanout
 	for _, id := range ids {
 		current, err := fetchTicketForUpdate(r.Context(), tx, id)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -573,7 +588,13 @@ func (s *Server) bulkUpdateTickets(w http.ResponseWriter, r *http.Request) {
 			}
 			patch.Tags = &merged
 		}
-		if _, err := applyPatch(r.Context(), tx, claims.UserID(), current, patch); err != nil {
+		after, err := applyPatch(r.Context(), tx, claims.UserID(), current, patch)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		out.ticket(after, false)
+		if err := s.notifyChanges(r.Context(), tx, &out, claims.UserID(), current, after); err != nil {
 			internalError(w, err)
 			return
 		}
@@ -583,6 +604,7 @@ func (s *Server) bulkUpdateTickets(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	s.broker.publish(out)
 	writeJSON(w, http.StatusOK, map[string]int{"updated": updated})
 }
 

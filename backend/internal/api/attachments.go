@@ -198,6 +198,9 @@ func (s *Server) uploadAttachment(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	var out fanout
+	out.ticket(ticket, a.Internal)
+	s.broker.publish(out)
 	writeJSON(w, http.StatusCreated, a)
 }
 

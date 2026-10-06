@@ -124,9 +124,17 @@ func (s *Server) createComment(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	var out fanout
+	out.ticket(ticket, in.Internal)
+	author := actorInfo{id: claims.UserID(), name: c.Author.Name, staff: claims.IsStaff()}
+	if err := s.notifyComment(r.Context(), tx, &out, author, ticket, c); err != nil {
+		internalError(w, err)
+		return
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		internalError(w, err)
 		return
 	}
+	s.broker.publish(out)
 	writeJSON(w, http.StatusCreated, c)
 }

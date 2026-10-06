@@ -134,5 +134,8 @@ func (s *Server) rateTicket(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	var out fanout
+	out.ticket(t, true)
+	s.broker.publish(out)
 	writeJSON(w, http.StatusOK, t)
 }
