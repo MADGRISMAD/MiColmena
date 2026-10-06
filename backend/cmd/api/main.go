@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // La imagen final no trae zonas horarias.
 
 	"github.com/jackc/pgx/v5/pgxpool"
 

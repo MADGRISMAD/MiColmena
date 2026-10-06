@@ -125,6 +125,18 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("GET /api/tags", s.staffOnly(s.listTags))
 	mux.Handle("GET /api/sla", s.staffOnly(s.listSLA))
+	mux.Handle("GET /api/reports", s.staffOnly(s.report))
+	mux.Handle("GET /api/reports/tickets.csv", s.staffOnly(s.exportTickets))
+	mux.Handle("GET /api/views", s.authed(s.listViews))
+	mux.Handle("POST /api/views", s.authed(s.createView))
+	mux.Handle("DELETE /api/views/{id}", s.authed(s.deleteView))
+
+	// La base de conocimiento publicada se puede leer sin iniciar sesión.
+	mux.Handle("GET /api/articles", s.optionalAuth(s.listArticles))
+	mux.Handle("GET /api/articles/{id}", s.optionalAuth(s.getArticle))
+	mux.Handle("POST /api/articles", s.staffOnly(s.createArticle))
+	mux.Handle("PATCH /api/articles/{id}", s.staffOnly(s.updateArticle))
+	mux.Handle("DELETE /api/articles/{id}", s.staffOnly(s.deleteArticle))
 	mux.Handle("PUT /api/sla", s.adminOnly(s.updateSLA))
 	mux.Handle("GET /api/categories", s.authed(s.listCategories))
 	mux.Handle("POST /api/categories", s.adminOnly(s.createCategory))
@@ -221,41 +233,60 @@ func claimsFrom(r *http.Request) auth.Claims {
 
 func (s *Server) authed(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if !ok || token == "" {
-			writeError(w, http.StatusUnauthorized, "falta el token de acceso")
-			return
-		}
-		claims, err := s.tokens.Parse(token)
-		if err != nil {
-			writeError(w, http.StatusUnauthorized, "token inválido o expirado")
-			return
-		}
-		// El rol se lee de la base de datos (búsqueda por clave primaria) para que
-		// un cambio de rol o un usuario eliminado se apliquen sin esperar a que expire el token.
-		var active bool
-		var validAfter time.Time
-		if err := s.db.QueryRow(r.Context(),
-			`SELECT role, active, tokens_valid_after FROM users WHERE id = $1`, claims.UserID(),
-		).Scan(&claims.Role, &active, &validAfter); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeError(w, http.StatusUnauthorized, "el usuario ya no existe")
+		claims, status, msg := s.authenticate(r)
+		if status != 0 {
+			if status == http.StatusInternalServerError {
+				writeError(w, status, "error interno")
 				return
 			}
-			internalError(w, err)
-			return
-		}
-		if !active {
-			writeError(w, http.StatusUnauthorized, "esta cuenta está desactivada")
-			return
-		}
-		// Un cambio de contraseña invalida los tokens emitidos antes.
-		if claims.IssuedAt == nil || claims.IssuedAt.Before(validAfter) {
-			writeError(w, http.StatusUnauthorized, "la sesión ya no es válida, vuelve a iniciar sesión")
+			writeError(w, status, msg)
 			return
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), claimsKey{}, claims)))
 	})
+}
+
+// optionalAuth deja pasar sin sesión (claims vacíos); si hay un token válido, lo usa.
+func (s *Server) optionalAuth(next http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if claims, status, _ := s.authenticate(r); status == 0 {
+			r = r.WithContext(context.WithValue(r.Context(), claimsKey{}, claims))
+		}
+		next(w, r)
+	})
+}
+
+// authenticate valida el token Bearer. Devuelve un código de error distinto de 0 si no es válido.
+func (s *Server) authenticate(r *http.Request) (auth.Claims, int, string) {
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok || token == "" {
+		return auth.Claims{}, http.StatusUnauthorized, "falta el token de acceso"
+	}
+	claims, err := s.tokens.Parse(token)
+	if err != nil {
+		return auth.Claims{}, http.StatusUnauthorized, "token inválido o expirado"
+	}
+	// El rol se lee de la base de datos (búsqueda por clave primaria) para que
+	// un cambio de rol o un usuario eliminado se apliquen sin esperar a que expire el token.
+	var active bool
+	var validAfter time.Time
+	if err := s.db.QueryRow(r.Context(),
+		`SELECT role, active, tokens_valid_after FROM users WHERE id = $1`, claims.UserID(),
+	).Scan(&claims.Role, &active, &validAfter); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return auth.Claims{}, http.StatusUnauthorized, "el usuario ya no existe"
+		}
+		slog.Error("error interno", "error", err)
+		return auth.Claims{}, http.StatusInternalServerError, ""
+	}
+	if !active {
+		return auth.Claims{}, http.StatusUnauthorized, "esta cuenta está desactivada"
+	}
+	// Un cambio de contraseña invalida los tokens emitidos antes.
+	if claims.IssuedAt == nil || claims.IssuedAt.Before(validAfter) {
+		return auth.Claims{}, http.StatusUnauthorized, "la sesión ya no es válida, vuelve a iniciar sesión"
+	}
+	return claims, 0, ""
 }
 
 func (s *Server) staffOnly(next http.HandlerFunc) http.Handler {
