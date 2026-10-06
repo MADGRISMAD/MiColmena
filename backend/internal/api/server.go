@@ -34,6 +34,10 @@ type Options struct {
 	LoginMaxFailures int
 	// LoginLockout es lo que dura ese bloqueo. Por defecto 15 minutos.
 	LoginLockout time.Duration
+	// UploadDir es la carpeta donde se guardan los adjuntos. Por defecto "data/uploads".
+	UploadDir string
+	// MaxUploadBytes es el tamaño máximo de cada adjunto. Por defecto 10 MB.
+	MaxUploadBytes int64
 }
 
 type Server struct {
@@ -43,6 +47,8 @@ type Server struct {
 	trustProxy  bool
 	authLimit   *ratelimit.Limiter
 	loginLock   *ratelimit.Lockout
+	uploadDir   string
+	maxUpload   int64
 }
 
 func NewServer(db *pgxpool.Pool, tokens *auth.Issuer, opts Options) *Server {
@@ -55,6 +61,12 @@ func NewServer(db *pgxpool.Pool, tokens *auth.Issuer, opts Options) *Server {
 	if opts.LoginLockout == 0 {
 		opts.LoginLockout = 15 * time.Minute
 	}
+	if opts.UploadDir == "" {
+		opts.UploadDir = "data/uploads"
+	}
+	if opts.MaxUploadBytes == 0 {
+		opts.MaxUploadBytes = 10 << 20
+	}
 	return &Server{
 		db:          db,
 		tokens:      tokens,
@@ -62,6 +74,8 @@ func NewServer(db *pgxpool.Pool, tokens *auth.Issuer, opts Options) *Server {
 		trustProxy:  opts.TrustProxy,
 		authLimit:   ratelimit.New(opts.AuthRatePerMin),
 		loginLock:   ratelimit.NewLockout(opts.LoginMaxFailures, opts.LoginLockout),
+		uploadDir:   opts.UploadDir,
+		maxUpload:   opts.MaxUploadBytes,
 	}
 }
 
@@ -82,6 +96,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PATCH /api/tickets/{id}", s.authed(s.updateTicket))
 	mux.Handle("POST /api/tickets/bulk", s.staffOnly(s.bulkUpdateTickets))
 	mux.Handle("GET /api/tickets/{id}/events", s.authed(s.listEvents))
+	mux.Handle("POST /api/tickets/{id}/satisfaction", s.authed(s.rateTicket))
+	mux.Handle("GET /api/tickets/{id}/attachments", s.authed(s.listAttachments))
+	mux.Handle("POST /api/tickets/{id}/attachments", s.authed(s.uploadAttachment))
+	mux.Handle("GET /api/attachments/{id}", s.authed(s.downloadAttachment))
+	mux.Handle("DELETE /api/attachments/{id}", s.authed(s.deleteAttachment))
 	mux.Handle("GET /api/tickets/{id}/comments", s.authed(s.listComments))
 	mux.Handle("POST /api/tickets/{id}/comments", s.authed(s.createComment))
 
@@ -91,6 +110,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PATCH /api/users/{id}/role", s.adminOnly(s.updateUserRole))
 
 	mux.Handle("GET /api/tags", s.staffOnly(s.listTags))
+	mux.Handle("GET /api/sla", s.staffOnly(s.listSLA))
+	mux.Handle("PUT /api/sla", s.adminOnly(s.updateSLA))
 	mux.Handle("GET /api/categories", s.authed(s.listCategories))
 	mux.Handle("POST /api/categories", s.adminOnly(s.createCategory))
 	mux.Handle("PATCH /api/categories/{id}", s.adminOnly(s.renameCategory))
@@ -250,7 +271,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Max-Age", "600")
 		}
 		if r.Method == http.MethodOptions {

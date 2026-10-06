@@ -58,6 +58,8 @@ func newEnv(t testing.TB, mutate ...func(*api.Options)) *env {
 	opts := api.Options{
 		CORSOrigins:    []string{"http://localhost:5173"},
 		AuthRatePerMin: 100_000,
+		UploadDir:      t.TempDir(),
+		MaxUploadBytes: 1 << 20,
 	}
 	for _, m := range mutate {
 		m(&opts)

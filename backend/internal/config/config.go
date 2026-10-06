@@ -24,6 +24,10 @@ type Config struct {
 	AuthRatePerMin   int
 	LoginMaxFailures int
 	LoginLockout     time.Duration
+
+	// Adjuntos: carpeta donde se guardan y tamaño máximo de cada archivo.
+	UploadDir      string
+	MaxUploadBytes int64
 }
 
 func Load() (Config, error) {
@@ -34,6 +38,7 @@ func Load() (Config, error) {
 		CORSOrigins:   splitList(env("CORS_ORIGINS", "http://localhost:5173")),
 		AdminEmail:    os.Getenv("ADMIN_EMAIL"),
 		AdminPassword: os.Getenv("ADMIN_PASSWORD"),
+		UploadDir:     env("UPLOAD_DIR", "data/uploads"),
 	}
 
 	ttl, err := time.ParseDuration(env("TOKEN_TTL", "24h"))
@@ -54,6 +59,12 @@ func Load() (Config, error) {
 	if cfg.LoginLockout, err = time.ParseDuration(env("LOGIN_LOCKOUT", "15m")); err != nil || cfg.LoginLockout <= 0 {
 		return cfg, errors.New("LOGIN_LOCKOUT inválido: usa una duración como 15m")
 	}
+
+	maxMB, err := positiveInt("MAX_UPLOAD_MB", 10)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.MaxUploadBytes = int64(maxMB) << 20
 
 	if cfg.DatabaseURL == "" {
 		return cfg, errors.New("falta DATABASE_URL")

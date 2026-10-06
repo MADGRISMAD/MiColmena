@@ -101,11 +101,14 @@ func (s *Server) createComment(w http.ResponseWriter, r *http.Request) {
 
 	// Si el cliente responde a un ticket que esperaba su respuesta, vuelve a quedar abierto.
 	reopen := !claims.IsStaff() && ticket.Status == "waiting"
+	// La primera respuesta pública de un agente cuenta para el SLA.
+	firstResponse := claims.IsStaff() && !in.Internal && claims.UserID() != ticket.Requester.ID
 	if _, err := tx.Exec(r.Context(), `
 		UPDATE tickets
 		SET updated_at = now(),
-		    status = CASE WHEN $2 THEN 'open' ELSE status END
-		WHERE id = $1`, id, reopen); err != nil {
+		    status = CASE WHEN $2 THEN 'open' ELSE status END,
+		    first_response_at = CASE WHEN $3 THEN coalesce(first_response_at, now()) ELSE first_response_at END
+		WHERE id = $1`, id, reopen, firstResponse); err != nil {
 		internalError(w, err)
 		return
 	}

@@ -57,6 +57,8 @@ func run() error {
 			AuthRatePerMin:   cfg.AuthRatePerMin,
 			LoginMaxFailures: cfg.LoginMaxFailures,
 			LoginLockout:     cfg.LoginLockout,
+			UploadDir:        cfg.UploadDir,
+			MaxUploadBytes:   cfg.MaxUploadBytes,
 		}).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

@@ -10,6 +10,13 @@ type statsResponse struct {
 	Unassigned int            `json:"unassigned_open"`
 	// Horas promedio entre la creación y la resolución, en los últimos 30 días.
 	AvgResolutionHours *float64 `json:"avg_resolution_hours_30d"`
+	// Tickets pendientes que ya superaron algún plazo de SLA.
+	SLABreached int `json:"sla_breached"`
+	// Valoraciones de los clientes en los últimos 30 días.
+	Satisfaction struct {
+		Good int `json:"good"`
+		Bad  int `json:"bad"`
+	} `json:"satisfaction_30d"`
 }
 
 // stats calcula los números del dashboard en una sola consulta.
@@ -60,10 +67,13 @@ func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.db.QueryRow(r.Context(), `
-		SELECT avg(extract(epoch FROM resolved_at - created_at) / 3600)
-		FROM tickets
-		WHERE resolved_at > now() - interval '30 days'`,
-	).Scan(&resp.AvgResolutionHours); err != nil {
+		SELECT
+			(SELECT avg(extract(epoch FROM resolved_at - created_at) / 3600)
+			 FROM tickets WHERE resolved_at > now() - interval '30 days'),
+			(SELECT count(*) FROM tickets t JOIN sla_policies p ON p.priority = t.priority WHERE `+slaBreached+`),
+			(SELECT count(*) FROM tickets WHERE satisfaction = 'good' AND rated_at > now() - interval '30 days'),
+			(SELECT count(*) FROM tickets WHERE satisfaction = 'bad' AND rated_at > now() - interval '30 days')`,
+	).Scan(&resp.AvgResolutionHours, &resp.SLABreached, &resp.Satisfaction.Good, &resp.Satisfaction.Bad); err != nil {
 		internalError(w, err)
 		return
 	}

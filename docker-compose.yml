@@ -35,8 +35,12 @@ services:
       LOGIN_LOCKOUT: ${LOGIN_LOCKOUT:-15m}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+    volumes:
+      - uploads:/data/uploads
     ports:
       - "8080:8080"
 
 volumes:
   pgdata:
+  uploads:

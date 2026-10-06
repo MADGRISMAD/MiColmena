@@ -47,16 +47,36 @@ type Ticket struct {
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
 	ResolvedAt   *time.Time      `json:"resolved_at"`
+
+	// SLA: plazos calculados desde la creación según la prioridad actual.
+	FirstResponseAt  *time.Time `json:"first_response_at"`
+	FirstResponseDue time.Time  `json:"first_response_due"`
+	ResolutionDue    time.Time  `json:"resolution_due"`
+
+	// Encuesta de satisfacción: "", "good" o "bad".
+	Satisfaction        string     `json:"satisfaction"`
+	SatisfactionComment string     `json:"satisfaction_comment"`
+	RatedAt             *time.Time `json:"rated_at"`
 }
 
 // ticketSelect une al solicitante y al agente asignado en una sola consulta (sin N+1).
 const ticketSelect = `
 	SELECT t.id, t.title, t.description, t.status, t.priority, t.category,
 	       r.id, r.name, a.id, a.name, t.tags,
-	       t.custom_fields, t.created_at, t.updated_at, t.resolved_at
+	       t.custom_fields, t.created_at, t.updated_at, t.resolved_at,
+	       t.first_response_at,
+	       t.created_at + p.first_response_minutes * interval '1 minute',
+	       t.created_at + p.resolution_minutes * interval '1 minute',
+	       t.satisfaction, t.satisfaction_comment, t.rated_at
 	FROM tickets t
 	JOIN users r ON r.id = t.requester_id
-	LEFT JOIN users a ON a.id = t.assignee_id`
+	LEFT JOIN users a ON a.id = t.assignee_id
+	JOIN sla_policies p ON p.priority = t.priority`
+
+// slaBreached es la condición SQL de un ticket pendiente que ya superó alguno de sus plazos.
+const slaBreached = `(t.status NOT IN ('resolved', 'closed') AND (
+		(t.first_response_at IS NULL AND t.created_at + p.first_response_minutes * interval '1 minute' < now())
+		OR t.created_at + p.resolution_minutes * interval '1 minute' < now()))`
 
 func scanTicket(row pgx.Row) (Ticket, error) {
 	var t Ticket
@@ -64,7 +84,9 @@ func scanTicket(row pgx.Row) (Ticket, error) {
 	var assigneeName *string
 	err := row.Scan(&t.ID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.Category,
 		&t.Requester.ID, &t.Requester.Name, &assigneeID, &assigneeName, &t.Tags,
-		&t.CustomFields, &t.CreatedAt, &t.UpdatedAt, &t.ResolvedAt)
+		&t.CustomFields, &t.CreatedAt, &t.UpdatedAt, &t.ResolvedAt,
+		&t.FirstResponseAt, &t.FirstResponseDue, &t.ResolutionDue,
+		&t.Satisfaction, &t.SatisfactionComment, &t.RatedAt)
 	if assigneeID != nil {
 		t.Assignee = &UserRef{ID: *assigneeID, Name: *assigneeName}
 	}
@@ -73,7 +95,7 @@ func scanTicket(row pgx.Row) (Ticket, error) {
 
 // listTickets admite filtros y paginación por cursor:
 //
-//	?status=open&priority=high&assignee=me|none|<id>&tag=vip&q=texto&before=<id>&limit=25
+//	?status=open&priority=high&assignee=me|none|<id>&tag=vip&sla=breached&q=texto&before=<id>&limit=25
 //
 // La paginación por cursor (id < before) se mantiene rápida aunque haya millones de
 // tickets, a diferencia de OFFSET, que recorre todas las filas saltadas.
@@ -118,6 +140,14 @@ func (s *Server) listTickets(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		where = append(where, "t.assignee_id = "+arg(id))
+	}
+	switch q.Get("sla") {
+	case "":
+	case "breached":
+		where = append(where, slaBreached)
+	default:
+		writeError(w, http.StatusBadRequest, "sla inválido")
+		return
 	}
 	if v := q.Get("tag"); v != "" {
 		where = append(where, "t.tags @> ARRAY["+arg(normalizeTag(v))+"]::text[]")

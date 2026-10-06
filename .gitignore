@@ -26,3 +26,6 @@ dist-ssr
 # Variables de entorno con secretos
 .env
 backend/.env
+
+# Adjuntos guardados en local
+backend/data/
