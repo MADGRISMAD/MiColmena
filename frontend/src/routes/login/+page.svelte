@@ -72,7 +72,10 @@
 	</form>
 
 	{#snippet footer()}
-		¿No tienes cuenta?&nbsp;<a href={resolve('/register')} class="text-primary underline">
+		¿No tienes cuenta?&nbsp;<a
+			href={resolve('/register')}
+			class="text-primary underline dark:text-honey"
+		>
 			Regístrate
 		</a>
 	{/snippet}

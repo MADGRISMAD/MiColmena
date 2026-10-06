@@ -6,7 +6,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-	--background: oklch(1 0 0);
+	--background: oklch(0.982 0.004 84);
 	--foreground: oklch(0.147 0.004 49.25);
 	--card: oklch(1 0 0);
 	--card-foreground: oklch(0.147 0.004 49.25);
@@ -30,20 +30,23 @@
 	--chart-4: oklch(0.555 0.163 48.998);
 	--chart-5: oklch(0.473 0.137 46.201);
 	--radius: 0.625rem;
-	--sidebar: oklch(0.985 0.001 106.423);
-	--sidebar-foreground: oklch(0.147 0.004 49.25);
-	--sidebar-primary: oklch(0.666 0.179 58.318);
-	--sidebar-primary-foreground: oklch(0.987 0.022 95.277);
-	--sidebar-accent: oklch(0.97 0.001 106.424);
-	--sidebar-accent-foreground: oklch(0.216 0.006 56.043);
-	--sidebar-border: oklch(0.923 0.003 48.717);
-	--sidebar-ring: oklch(0.709 0.01 56.259);
+	--sidebar: oklch(0.19 0.012 52);
+	--sidebar-foreground: oklch(0.84 0.012 75);
+	--sidebar-primary: oklch(0.82 0.16 82);
+	--sidebar-primary-foreground: oklch(0.21 0.03 60);
+	--sidebar-accent: oklch(0.26 0.016 55);
+	--sidebar-accent-foreground: oklch(0.98 0.005 85);
+	--sidebar-border: oklch(1 0 0 / 9%);
+	--sidebar-ring: oklch(0.82 0.16 82);
+	/* Miel: acento brillante para hexágonos y detalles (no para texto sobre blanco). */
+	--honey: oklch(0.82 0.16 82);
+	--honey-foreground: oklch(0.21 0.03 60);
 }
 
 .dark {
-	--background: oklch(0.147 0.004 49.25);
+	--background: oklch(0.155 0.006 50);
 	--foreground: oklch(0.985 0.001 106.423);
-	--card: oklch(0.216 0.006 56.043);
+	--card: oklch(0.2 0.008 52);
 	--card-foreground: oklch(0.985 0.001 106.423);
 	--popover: oklch(0.216 0.006 56.043);
 	--popover-foreground: oklch(0.985 0.001 106.423);
@@ -64,14 +67,16 @@
 	--chart-3: oklch(0.666 0.179 58.318);
 	--chart-4: oklch(0.555 0.163 48.998);
 	--chart-5: oklch(0.473 0.137 46.201);
-	--sidebar: oklch(0.216 0.006 56.043);
-	--sidebar-foreground: oklch(0.985 0.001 106.423);
-	--sidebar-primary: oklch(0.769 0.188 70.08);
-	--sidebar-primary-foreground: oklch(0.279 0.077 45.635);
-	--sidebar-accent: oklch(0.268 0.007 34.298);
-	--sidebar-accent-foreground: oklch(0.985 0.001 106.423);
-	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.553 0.013 58.071);
+	--sidebar: oklch(0.13 0.008 50);
+	--sidebar-foreground: oklch(0.84 0.012 75);
+	--sidebar-primary: oklch(0.82 0.16 82);
+	--sidebar-primary-foreground: oklch(0.21 0.03 60);
+	--sidebar-accent: oklch(0.22 0.014 55);
+	--sidebar-accent-foreground: oklch(0.98 0.005 85);
+	--sidebar-border: oklch(1 0 0 / 8%);
+	--sidebar-ring: oklch(0.82 0.16 82);
+	--honey: oklch(0.82 0.16 82);
+	--honey-foreground: oklch(0.21 0.03 60);
 }
 
 @theme inline {
@@ -84,6 +89,8 @@
 	--color-sidebar-primary: var(--sidebar-primary);
 	--color-sidebar-foreground: var(--sidebar-foreground);
 	--color-sidebar: var(--sidebar);
+	--color-honey: var(--honey);
+	--color-honey-foreground: var(--honey-foreground);
 	--color-chart-5: var(--chart-5);
 	--color-chart-4: var(--chart-4);
 	--color-chart-3: var(--chart-3);
@@ -125,5 +132,22 @@
 	}
 	html {
 		@apply font-sans;
+	}
+}
+
+/* --- Identidad de colmena --- */
+
+@layer utilities {
+	/* Hexágono con punta arriba: avatares, iconos y decoraciones. */
+	.hex {
+		clip-path: polygon(50% 0, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
+	}
+
+	/* Panal de fondo. Se elige el trazo según el fondo: claro u oscuro. */
+	.bg-honeycomb {
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cg fill='none' stroke='%23d97706' stroke-opacity='0.13' stroke-width='1.2'%3E%3Cpath d='M28 66L0 50V16L28 0l28 16v34L28 66v34'/%3E%3Cpath d='M28 0v34L0 50v34l28 16 28-16V50L28 34'/%3E%3C/g%3E%3C/svg%3E");
+	}
+	.bg-honeycomb-dark {
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cg fill='none' stroke='%23fbbf24' stroke-opacity='0.09' stroke-width='1.2'%3E%3Cpath d='M28 66L0 50V16L28 0l28 16v34L28 66v34'/%3E%3Cpath d='M28 0v34L0 50v34l28 16 28-16V50L28 34'/%3E%3C/g%3E%3C/svg%3E");
 	}
 }

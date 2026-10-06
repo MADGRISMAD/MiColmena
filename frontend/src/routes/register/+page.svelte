@@ -98,7 +98,10 @@
 	</form>
 
 	{#snippet footer()}
-		¿Ya tienes cuenta?&nbsp;<a href={resolve('/login')} class="text-primary underline">
+		¿Ya tienes cuenta?&nbsp;<a
+			href={resolve('/login')}
+			class="text-primary underline dark:text-honey"
+		>
 			Inicia sesión
 		</a>
 	{/snippet}

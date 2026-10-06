@@ -2,26 +2,26 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import SearchIcon from '@lucide/svelte/icons/search';
+	import XIcon from '@lucide/svelte/icons/x';
 	import {
 		api,
 		TICKET_PRIORITIES,
-		TICKET_STATUSES,
 		toQuery,
 		type Ticket,
-		type TicketFilters
+		type TicketFilters,
+		type TicketStatus
 	} from '#lib/api/index.js';
+	import EmptyState from '#lib/components/empty-state.svelte';
+	import HexAvatar from '#lib/components/hex-avatar.svelte';
 	import PageHeader from '#lib/components/page-header.svelte';
 	import PriorityBadge from '#lib/components/priority-badge.svelte';
 	import StatusBadge from '#lib/components/status-badge.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
-	import * as Table from '#lib/components/ui/table/index.js';
-	import { formatRelative, priorityLabels, statusLabels } from '#lib/format.js';
+	import { formatDateTime, formatRelative, priorityLabels } from '#lib/format.js';
+	import { cn } from '#lib/utils.js';
 	import { isStaff } from '#lib/stores/auth.js';
 	import { parseTicketFilters } from './filters.js';
 
@@ -33,8 +33,6 @@
 
 	// Los filtros viven en la URL: se pueden compartir y el botón Atrás funciona.
 	const filters = $derived(parseTicketFilters(page.url.searchParams));
-	// Texto del buscador: sigue a la URL, pero se puede editar antes de enviarlo.
-	let search = $derived(filters.q ?? '');
 
 	let requestId = 0;
 	async function load(f: TicketFilters, append = false) {
@@ -71,81 +69,108 @@
 		goto(target, { replace: true, reset: false });
 	}
 
+	const statusTabs: { value: TicketStatus | ''; label: string }[] = [
+		{ value: '', label: 'Todos' },
+		{ value: 'open', label: 'Abiertos' },
+		{ value: 'in_progress', label: 'En curso' },
+		{ value: 'waiting', label: 'En espera' },
+		{ value: 'resolved', label: 'Resueltos' },
+		{ value: 'closed', label: 'Cerrados' }
+	];
+
+	const title = $derived(
+		!$isStaff
+			? 'Mis tickets'
+			: filters.assignee === 'me'
+				? 'Asignados a mí'
+				: filters.assignee === 'none'
+					? 'Sin asignar'
+					: 'Todos los tickets'
+	);
+	const description = $derived(
+		$isStaff ? 'Solicitudes de soporte de todos los clientes.' : 'Las solicitudes que has abierto.'
+	);
+
 	const hasFilters = $derived(Object.keys(filters).length > 0);
 </script>
 
-<PageHeader
-	title={$isStaff ? 'Tickets' : 'Mis tickets'}
-	description={$isStaff ? 'Todos los tickets de soporte.' : 'Las solicitudes que has abierto.'}
->
-	{#snippet actions()}
-		<Button href={resolve('/(app)/tickets/new')}>
-			<PlusIcon aria-hidden="true" />
-			Nuevo ticket
-		</Button>
-	{/snippet}
-</PageHeader>
+<PageHeader eyebrow={$isStaff ? 'Vista' : undefined} {title} {description} />
 
-<div class="mb-4 flex flex-wrap gap-2">
-	<form
-		class="relative min-w-56 flex-1"
-		role="search"
-		onsubmit={(e) => {
-			e.preventDefault();
-			setFilter('q', search.trim());
-		}}
-	>
-		<SearchIcon
-			class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-			aria-hidden="true"
-		/>
-		<Input
-			type="search"
-			placeholder="Buscar por título o descripción…"
-			aria-label="Buscar tickets"
-			class="pl-8"
-			bind:value={search}
-		/>
-	</form>
-
-	<NativeSelect
-		aria-label="Filtrar por estado"
-		value={filters.status ?? ''}
-		onchange={(e) => setFilter('status', e.currentTarget.value)}
-	>
-		<NativeSelectOption value="">Todos los estados</NativeSelectOption>
-		{#each TICKET_STATUSES as status (status)}
-			<NativeSelectOption value={status}>{statusLabels[status]}</NativeSelectOption>
-		{/each}
-	</NativeSelect>
-
-	<NativeSelect
-		aria-label="Filtrar por prioridad"
-		value={filters.priority ?? ''}
-		onchange={(e) => setFilter('priority', e.currentTarget.value)}
-	>
-		<NativeSelectOption value="">Todas las prioridades</NativeSelectOption>
-		{#each TICKET_PRIORITIES as priority (priority)}
-			<NativeSelectOption value={priority}>{priorityLabels[priority]}</NativeSelectOption>
-		{/each}
-	</NativeSelect>
-
-	{#if $isStaff}
-		<NativeSelect
-			aria-label="Filtrar por asignación"
-			value={filters.assignee === undefined ? '' : String(filters.assignee)}
-			onchange={(e) => setFilter('assignee', e.currentTarget.value)}
+<!-- Pestañas de estado y filtros. -->
+<div class="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+	<div class="-mx-4 overflow-x-auto px-4 xl:mx-0 xl:px-0">
+		<div
+			class="inline-flex gap-1 rounded-lg bg-muted p-1"
+			role="group"
+			aria-label="Filtrar por estado"
 		>
-			<NativeSelectOption value="">Cualquier agente</NativeSelectOption>
-			<NativeSelectOption value="me">Asignados a mí</NativeSelectOption>
-			<NativeSelectOption value="none">Sin asignar</NativeSelectOption>
-		</NativeSelect>
-	{/if}
+			{#each statusTabs as tab (tab.value)}
+				{@const active = (filters.status ?? '') === tab.value}
+				<button
+					type="button"
+					aria-pressed={active}
+					onclick={() => setFilter('status', tab.value)}
+					class={cn(
+						'rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground',
+						active && 'bg-card text-foreground shadow-sm'
+					)}
+				>
+					{tab.label}
+				</button>
+			{/each}
+		</div>
+	</div>
 
-	{#if hasFilters}
-		<Button variant="ghost" href={resolve('/(app)/tickets')}>Quitar filtros</Button>
-	{/if}
+	<div class="flex flex-wrap items-center gap-2">
+		<NativeSelect
+			size="sm"
+			aria-label="Filtrar por prioridad"
+			value={filters.priority ?? ''}
+			onchange={(e) => setFilter('priority', e.currentTarget.value)}
+		>
+			<NativeSelectOption value="">Cualquier prioridad</NativeSelectOption>
+			{#each [...TICKET_PRIORITIES].reverse() as priority (priority)}
+				<NativeSelectOption value={priority}>{priorityLabels[priority]}</NativeSelectOption>
+			{/each}
+		</NativeSelect>
+
+		{#if $isStaff}
+			<NativeSelect
+				size="sm"
+				aria-label="Filtrar por asignación"
+				value={filters.assignee === undefined ? '' : String(filters.assignee)}
+				onchange={(e) => setFilter('assignee', e.currentTarget.value)}
+			>
+				<NativeSelectOption value="">Cualquier agente</NativeSelectOption>
+				<NativeSelectOption value="me">Asignados a mí</NativeSelectOption>
+				<NativeSelectOption value="none">Sin asignar</NativeSelectOption>
+			</NativeSelect>
+		{/if}
+
+		{#if hasFilters}
+			<Button variant="ghost" size="sm" href={resolve('/(app)/tickets')}>Quitar filtros</Button>
+		{/if}
+	</div>
 </div>
+
+{#if filters.q}
+	<div class="mb-4 flex items-center gap-2 text-sm">
+		<span class="text-muted-foreground">Resultados para</span>
+		<span
+			class="inline-flex items-center gap-1 rounded-full bg-honey/20 py-0.5 pr-1 pl-3 font-medium"
+		>
+			“{filters.q}”
+			<button
+				type="button"
+				class="rounded-full p-0.5 hover:bg-honey/30"
+				onclick={() => setFilter('q', '')}
+				aria-label="Quitar búsqueda"
+			>
+				<XIcon class="size-3.5" aria-hidden="true" />
+			</button>
+		</span>
+	</div>
+{/if}
 
 {#if error}
 	<Card.Root>
@@ -155,66 +180,130 @@
 		</Card.Content>
 	</Card.Root>
 {:else if loading}
-	<div class="grid gap-2" aria-busy="true">
-		{#each { length: 5 }, i (i)}
-			<Skeleton class="h-12" />
+	<Card.Root class="gap-0 py-0" aria-busy="true">
+		{#each { length: 6 }, i (i)}
+			<div class="flex items-center gap-4 border-b px-4 py-4 last:border-0">
+				<Skeleton class="h-4 w-10" />
+				<Skeleton class="h-4 flex-1" />
+				<Skeleton class="hidden h-5 w-20 rounded-full sm:block" />
+				<Skeleton class="hex hidden size-6 md:block" />
+			</div>
 		{/each}
-	</div>
+	</Card.Root>
 {:else if tickets.length === 0}
 	<Card.Root>
-		<Card.Content class="py-10 text-center">
-			<p class="font-medium">
-				{hasFilters ? 'Ningún ticket coincide con los filtros.' : 'Todavía no hay tickets.'}
-			</p>
-			{#if !hasFilters}
-				<Button class="mt-4" href={resolve('/(app)/tickets/new')}>Abrir el primero</Button>
-			{/if}
-		</Card.Content>
+		{#if hasFilters}
+			<EmptyState
+				title="Ningún ticket coincide con los filtros"
+				description="Prueba con otro estado o quita la búsqueda."
+			>
+				<Button variant="outline" href={resolve('/(app)/tickets')}>Quitar filtros</Button>
+			</EmptyState>
+		{:else}
+			<EmptyState
+				title="Todavía no hay tickets"
+				description={$isStaff
+					? 'Cuando un cliente abra una solicitud, aparecerá aquí.'
+					: 'Cuéntanos qué necesitas y el equipo de soporte te responderá.'}
+			>
+				<Button href={resolve('/(app)/tickets/new')}>Abrir el primero</Button>
+			</EmptyState>
+		{/if}
 	</Card.Root>
 {:else}
-	<Card.Root class="py-0">
-		<Table.Root>
-			<Table.Header>
-				<Table.Row>
-					<Table.Head class="w-16">#</Table.Head>
-					<Table.Head>Título</Table.Head>
-					<Table.Head>Estado</Table.Head>
-					<Table.Head>Prioridad</Table.Head>
+	<!-- Escritorio: tabla. -->
+	<Card.Root class="hidden gap-0 overflow-hidden py-0 md:flex">
+		<table class="w-full text-sm">
+			<thead class="border-b bg-muted/50 text-left text-xs whitespace-nowrap text-muted-foreground">
+				<tr>
+					<th class="w-20 px-4 py-2.5 font-medium">ID</th>
+					<th class="w-full px-4 py-2.5 font-medium">Asunto</th>
+					<th class="px-4 py-2.5 font-medium">Estado</th>
+					<th class="px-4 py-2.5 font-medium">Prioridad</th>
 					{#if $isStaff}
-						<Table.Head class="hidden lg:table-cell">Solicitante</Table.Head>
-						<Table.Head class="hidden md:table-cell">Asignado</Table.Head>
+						<th class="hidden px-4 py-2.5 font-medium xl:table-cell">Solicitante</th>
+						<th class="px-4 py-2.5 font-medium">Asignado</th>
 					{/if}
-					<Table.Head class="hidden sm:table-cell">Actualizado</Table.Head>
-				</Table.Row>
-			</Table.Header>
-			<Table.Body>
+					<th class="hidden px-4 py-2.5 text-right font-medium lg:table-cell">Actualizado</th>
+				</tr>
+			</thead>
+			<tbody>
 				{#each tickets as ticket (ticket.id)}
-					<Table.Row class="relative">
-						<Table.Cell class="text-muted-foreground tabular-nums">{ticket.id}</Table.Cell>
-						<Table.Cell class="max-w-80 truncate font-medium">
+					<tr class="relative border-b transition-colors last:border-0 hover:bg-honey/5">
+						<td class="px-4 py-3 font-mono text-xs text-muted-foreground tabular-nums">
+							#{ticket.id}
+						</td>
+						<td class="max-w-0 px-4 py-3">
 							<a
 								href={resolve('/(app)/tickets/[id]', { id: String(ticket.id) })}
-								class="after:absolute after:inset-0 hover:underline"
+								class="block truncate font-medium after:absolute after:inset-0 hover:text-primary dark:hover:text-honey"
 							>
 								{ticket.title}
 							</a>
-						</Table.Cell>
-						<Table.Cell><StatusBadge status={ticket.status} /></Table.Cell>
-						<Table.Cell><PriorityBadge priority={ticket.priority} /></Table.Cell>
+							{#if ticket.category}
+								<span class="mt-0.5 block truncate text-xs text-muted-foreground">
+									{ticket.category}
+								</span>
+							{/if}
+						</td>
+						<td class="px-4 py-3"><StatusBadge status={ticket.status} /></td>
+						<td class="px-4 py-3 whitespace-nowrap"><PriorityBadge priority={ticket.priority} /></td
+						>
 						{#if $isStaff}
-							<Table.Cell class="hidden lg:table-cell">{ticket.requester.name}</Table.Cell>
-							<Table.Cell class="hidden text-muted-foreground md:table-cell">
-								{ticket.assignee?.name ?? 'Sin asignar'}
-							</Table.Cell>
+							<td class="hidden px-4 py-3 xl:table-cell">
+								<span class="flex items-center gap-2">
+									<HexAvatar name={ticket.requester.name} id={ticket.requester.id} size="xs" />
+									<span class="truncate">{ticket.requester.name}</span>
+								</span>
+							</td>
+							<td class="px-4 py-3">
+								<span class="flex items-center gap-2">
+									<HexAvatar name={ticket.assignee?.name} id={ticket.assignee?.id} size="xs" />
+									<span class={cn('truncate', !ticket.assignee && 'text-muted-foreground')}>
+										{ticket.assignee?.name ?? 'Sin asignar'}
+									</span>
+								</span>
+							</td>
 						{/if}
-						<Table.Cell class="hidden text-muted-foreground sm:table-cell">
+						<td
+							class="hidden px-4 py-3 text-right whitespace-nowrap text-muted-foreground lg:table-cell"
+							title={formatDateTime(ticket.updated_at)}
+						>
 							{formatRelative(ticket.updated_at)}
-						</Table.Cell>
-					</Table.Row>
+						</td>
+					</tr>
 				{/each}
-			</Table.Body>
-		</Table.Root>
+			</tbody>
+		</table>
 	</Card.Root>
+
+	<!-- Móvil: tarjetas, para que nada quede cortado. -->
+	<ul class="grid gap-2 md:hidden">
+		{#each tickets as ticket (ticket.id)}
+			<li class="relative rounded-xl border bg-card p-4 shadow-xs">
+				<div class="mb-1.5 flex items-center justify-between gap-2">
+					<span class="font-mono text-xs text-muted-foreground">#{ticket.id}</span>
+					<StatusBadge status={ticket.status} />
+				</div>
+				<a
+					href={resolve('/(app)/tickets/[id]', { id: String(ticket.id) })}
+					class="block font-medium after:absolute after:inset-0"
+				>
+					{ticket.title}
+				</a>
+				<div class="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+					<PriorityBadge priority={ticket.priority} class="text-xs" />
+					{#if $isStaff}
+						<span class="flex min-w-0 items-center gap-1.5">
+							<HexAvatar name={ticket.assignee?.name} id={ticket.assignee?.id} size="xs" />
+							<span class="truncate">{ticket.assignee?.name ?? 'Sin asignar'}</span>
+						</span>
+					{/if}
+					<span class="ml-auto whitespace-nowrap">{formatRelative(ticket.updated_at)}</span>
+				</div>
+			</li>
+		{/each}
+	</ul>
 
 	{#if nextCursor !== null}
 		<div class="mt-4 flex justify-center">
