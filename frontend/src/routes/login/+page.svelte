@@ -66,6 +66,13 @@
 			{/snippet}
 		</FormField>
 
+		<a
+			href={resolve('/forgot-password')}
+			class="-mt-2 justify-self-end text-sm text-muted-foreground underline-offset-4 hover:underline"
+		>
+			¿Olvidaste tu contraseña?
+		</a>
+
 		<Button type="submit" disabled={$submitting} class="w-full">
 			{$submitting ? 'Entrando…' : 'Entrar'}
 		</Button>

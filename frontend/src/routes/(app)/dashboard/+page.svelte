@@ -4,6 +4,8 @@
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
 	import ChevronsUpIcon from '@lucide/svelte/icons/chevrons-up';
 	import InboxIcon from '@lucide/svelte/icons/inbox';
+	import SirenIcon from '@lucide/svelte/icons/siren';
+	import SmileIcon from '@lucide/svelte/icons/smile';
 	import TimerIcon from '@lucide/svelte/icons/timer';
 	import UserRoundXIcon from '@lucide/svelte/icons/user-round-x';
 	import {
@@ -20,6 +22,7 @@
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { formatHours, formatRelative, priorityLabels, statusLabels } from '#lib/format.js';
+	import { liveEvent } from '#lib/live/index.js';
 	import { cn } from '#lib/utils.js';
 	import { isStaff, user } from '#lib/stores/auth.js';
 
@@ -52,7 +55,14 @@
 			goto(resolve('/(app)/tickets'), { replace: true });
 			return;
 		}
+		void $liveEvent.seq; // en tiempo real
 		load();
+	});
+
+	const csat = $derived.by(() => {
+		const r = stats?.satisfaction_30d;
+		const n = r ? r.good + r.bad : 0;
+		return r && n > 0 ? `${Math.round((r.good / n) * 100)} %` : '—';
 	});
 
 	const unresolved = $derived(
@@ -119,7 +129,7 @@
 		<Skeleton class="h-64 rounded-xl" />
 	</div>
 {:else}
-	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 		{@render kpi(
 			'Tickets sin resolver',
 			unresolved,
@@ -140,6 +150,20 @@
 			ChevronsUpIcon,
 			resolve('/(app)/tickets?priority=urgent'),
 			'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
+		)}
+		{@render kpi(
+			'SLA vencido',
+			stats.sla_breached,
+			SirenIcon,
+			resolve('/(app)/tickets?sla=breached'),
+			stats.sla_breached > 0 ? 'bg-red-600 text-white' : 'bg-muted text-muted-foreground'
+		)}
+		{@render kpi(
+			'Satisfacción (30 días)',
+			csat,
+			SmileIcon,
+			null,
+			'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300'
 		)}
 		{@render kpi(
 			'Resolución media (30 días)',

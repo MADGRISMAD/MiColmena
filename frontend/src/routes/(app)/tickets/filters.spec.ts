@@ -17,8 +17,17 @@ describe('parseTicketFilters', () => {
 		expect(parseTicketFilters(new URLSearchParams('assignee=none'))).toEqual({ assignee: 'none' });
 	});
 
+	it('lee la etiqueta y el filtro de SLA', () => {
+		expect(parseTicketFilters(new URLSearchParams('tag=VIP&sla=breached'))).toEqual({
+			tag: 'vip',
+			sla: 'breached'
+		});
+	});
+
 	it('descarta valores inválidos', () => {
-		const params = new URLSearchParams('status=borrado&priority=x&assignee=abc&q=%20');
+		const params = new URLSearchParams(
+			'status=borrado&priority=x&assignee=abc&q=%20&sla=x&tag=%20'
+		);
 		expect(parseTicketFilters(params)).toEqual({});
 	});
 });

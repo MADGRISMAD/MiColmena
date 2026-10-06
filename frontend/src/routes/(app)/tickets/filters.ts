@@ -21,6 +21,11 @@ export function parseTicketFilters(params: Pick<URLSearchParams, 'get'>): Ticket
 		filters.assignee = Number(assignee);
 	}
 
+	const tag = params.get('tag')?.trim().toLowerCase();
+	if (tag) filters.tag = tag;
+
+	if (params.get('sla') === 'breached') filters.sla = 'breached';
+
 	const q = params.get('q')?.trim();
 	if (q) filters.q = q;
 

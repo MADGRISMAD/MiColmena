@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatHours, formatRelative } from './format';
+import { describeEvent, formatHours, formatRelative } from './format';
 
 describe('formatRelative', () => {
 	const now = new Date('2026-10-05T12:00:00Z');
@@ -21,5 +21,22 @@ describe('formatHours', () => {
 		expect(formatHours(0.25)).toBe('15 min');
 		expect(formatHours(3.5)).toBe('3,5 h');
 		expect(formatHours(72)).toBe('3 días');
+	});
+});
+
+describe('describeEvent', () => {
+	it('describe cada tipo de cambio', () => {
+		expect(describeEvent({ kind: 'status', old_value: 'open', new_value: 'waiting' })).toBe(
+			'cambió el estado de Abierto a En espera'
+		);
+		expect(describeEvent({ kind: 'assignee', old_value: '', new_value: 'Luis' })).toBe(
+			'asignó el ticket a Luis'
+		);
+		expect(describeEvent({ kind: 'assignee', old_value: 'Luis', new_value: '' })).toBe(
+			'quitó la asignación de Luis'
+		);
+		expect(describeEvent({ kind: 'tags', old_value: 'a,b', new_value: 'b,c' })).toBe(
+			'añadió #c y quitó #a'
+		);
 	});
 });

@@ -1,14 +1,31 @@
 import type {
+	Article,
+	ArticleInput,
+	Attachment,
 	AuthResponse,
+	BulkUpdateInput,
+	Category,
 	Comment,
 	CreateTicketInput,
+	CreateUserInput,
 	List,
+	Macro,
+	MacroInput,
+	NotificationList,
 	Page,
+	Report,
+	ReportRange,
 	Role,
+	Satisfaction,
+	SavedView,
+	SlaPolicy,
 	Stats,
+	TagCount,
 	Ticket,
+	TicketEvent,
 	TicketFilters,
 	UpdateTicketInput,
+	UpdateUserInput,
 	User
 } from './types';
 
@@ -49,9 +66,11 @@ export function createApiClient(options: ApiClientOptions = {}) {
 	const baseUrl = (options.baseUrl ?? '') + '/api';
 	const doFetch = options.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
 
-	async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+	/** Hace la petición y devuelve la respuesta si fue correcta; si no, lanza ApiError. */
+	async function send(method: string, path: string, body?: unknown): Promise<Response> {
 		const headers: Record<string, string> = {};
-		if (body !== undefined) headers['Content-Type'] = 'application/json';
+		const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+		if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
 		const token = options.getToken?.();
 		if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -60,18 +79,27 @@ export function createApiClient(options: ApiClientOptions = {}) {
 			res = await doFetch(baseUrl + path, {
 				method,
 				headers,
-				body: body === undefined ? undefined : JSON.stringify(body)
+				body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body)
 			});
 		} catch {
 			throw new ApiError(0, 'No se pudo conectar con el servidor');
 		}
 
-		const data = res.status === 204 ? null : await res.json().catch(() => null);
 		if (!res.ok) {
+			const data = await res.json().catch(() => null);
 			if (res.status === 401) options.onUnauthorized?.();
 			throw new ApiError(res.status, data?.error ?? `Error ${res.status}`, data?.fields ?? {});
 		}
-		return data as T;
+		return res;
+	}
+
+	async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+		const res = await send(method, path, body);
+		return (res.status === 204 ? null : await res.json().catch(() => null)) as T;
+	}
+
+	async function download(path: string): Promise<Blob> {
+		return (await send('GET', path)).blob();
 	}
 
 	return {
@@ -82,6 +110,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
 		register: (name: string, email: string, password: string) =>
 			request<AuthResponse>('POST', '/auth/register', { name, email, password }),
 		me: () => request<User>('GET', '/me'),
+		updateMe: (input: {
+			name?: string;
+			email?: string;
+			current_password?: string;
+			email_notifications?: boolean;
+		}) => request<User>('PATCH', '/me', input),
+		changePassword: (current_password: string, new_password: string) =>
+			request<AuthResponse>('POST', '/me/password', { current_password, new_password }),
+		forgotPassword: (email: string) => request<null>('POST', '/auth/forgot', { email }),
+		resetPassword: (token: string, password: string) =>
+			request<AuthResponse>('POST', '/auth/reset', { token, password }),
 
 		listTickets: (filters: TicketFilters = {}) =>
 			request<Page<Ticket>>('GET', '/tickets' + toQuery({ ...filters })),
@@ -89,16 +128,77 @@ export function createApiClient(options: ApiClientOptions = {}) {
 		createTicket: (input: CreateTicketInput) => request<Ticket>('POST', '/tickets', input),
 		updateTicket: (id: number, input: UpdateTicketInput) =>
 			request<Ticket>('PATCH', `/tickets/${id}`, input),
+		bulkUpdate: (input: BulkUpdateInput) =>
+			request<{ updated: number }>('POST', '/tickets/bulk', input),
+		listEvents: (ticketId: number) =>
+			request<List<TicketEvent>>('GET', `/tickets/${ticketId}/events`),
+		rateTicket: (ticketId: number, rating: Exclude<Satisfaction, ''>, comment = '') =>
+			request<Ticket>('POST', `/tickets/${ticketId}/satisfaction`, { rating, comment }),
+
+		listAttachments: (ticketId: number) =>
+			request<List<Attachment>>('GET', `/tickets/${ticketId}/attachments`),
+		/** Sube un archivo a la descripción del ticket o, con commentId, a ese comentario. */
+		uploadAttachment: (ticketId: number, file: File, commentId?: number) => {
+			const form = new FormData();
+			if (commentId) form.append('comment_id', String(commentId));
+			form.append('file', file);
+			return request<Attachment>('POST', `/tickets/${ticketId}/attachments`, form);
+		},
+		downloadAttachment: (id: number) => download(`/attachments/${id}`),
+		deleteAttachment: (id: number) => request<null>('DELETE', `/attachments/${id}`),
 
 		listComments: (ticketId: number) =>
 			request<List<Comment>>('GET', `/tickets/${ticketId}/comments`),
 		addComment: (ticketId: number, body: string, internal = false) =>
 			request<Comment>('POST', `/tickets/${ticketId}/comments`, { body, internal }),
 
-		listUsers: (role?: Role) => request<List<User>>('GET', '/users' + toQuery({ role })),
+		listUsers: (role?: Role, options: { q?: string; all?: boolean } = {}) =>
+			request<List<User>>(
+				'GET',
+				'/users' + toQuery({ role, q: options.q, active: options.all ? 'all' : undefined })
+			),
+		createUser: (input: CreateUserInput) => request<User>('POST', '/users', input),
+		updateUser: (id: number, input: UpdateUserInput) =>
+			request<User>('PATCH', `/users/${id}`, input),
 		setUserRole: (id: number, role: Role) => request<User>('PATCH', `/users/${id}/role`, { role }),
 
-		stats: () => request<Stats>('GET', '/stats')
+		stats: () => request<Stats>('GET', '/stats'),
+
+		listTags: () => request<List<TagCount>>('GET', '/tags'),
+		listCategories: () => request<List<Category>>('GET', '/categories'),
+		createCategory: (name: string) => request<Category>('POST', '/categories', { name }),
+		renameCategory: (id: number, name: string) =>
+			request<Category>('PATCH', `/categories/${id}`, { name }),
+		deleteCategory: (id: number) => request<null>('DELETE', `/categories/${id}`),
+
+		listMacros: () => request<List<Macro>>('GET', '/macros'),
+		createMacro: (input: MacroInput) => request<Macro>('POST', '/macros', input),
+		updateMacro: (id: number, input: MacroInput) => request<Macro>('PATCH', `/macros/${id}`, input),
+		deleteMacro: (id: number) => request<null>('DELETE', `/macros/${id}`),
+
+		listSla: () => request<List<SlaPolicy>>('GET', '/sla'),
+		updateSla: (items: SlaPolicy[]) => request<List<SlaPolicy>>('PUT', '/sla', { items }),
+
+		listNotifications: (limit = 20) =>
+			request<NotificationList>('GET', '/notifications' + toQuery({ limit })),
+		readNotifications: (input: { ids?: number[]; ticket_id?: number } = {}) =>
+			request<null>('POST', '/notifications/read', input),
+
+		listArticles: (q?: string) => request<List<Article>>('GET', '/articles' + toQuery({ q })),
+		getArticle: (id: number) => request<Article>('GET', `/articles/${id}`),
+		createArticle: (input: ArticleInput) => request<Article>('POST', '/articles', input),
+		updateArticle: (id: number, input: ArticleInput) =>
+			request<Article>('PATCH', `/articles/${id}`, input),
+		deleteArticle: (id: number) => request<null>('DELETE', `/articles/${id}`),
+
+		listViews: () => request<List<SavedView>>('GET', '/views'),
+		createView: (name: string, query: string) =>
+			request<SavedView>('POST', '/views', { name, query }),
+		deleteView: (id: number) => request<null>('DELETE', `/views/${id}`),
+
+		report: (range: ReportRange = {}) => request<Report>('GET', '/reports' + toQuery({ ...range })),
+		exportTickets: (range: ReportRange = {}) =>
+			download('/reports/tickets.csv' + toQuery({ ...range }))
 	};
 }
 

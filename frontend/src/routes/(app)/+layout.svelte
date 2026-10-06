@@ -2,8 +2,15 @@
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import BookOpenIcon from '@lucide/svelte/icons/book-open';
+	import ChartColumnIcon from '@lucide/svelte/icons/chart-column';
 	import ClockIcon from '@lucide/svelte/icons/clock';
+	import FilterIcon from '@lucide/svelte/icons/filter';
 	import InboxIcon from '@lucide/svelte/icons/inbox';
+	import MessageSquareQuoteIcon from '@lucide/svelte/icons/message-square-quote';
+	import SettingsIcon from '@lucide/svelte/icons/settings';
+	import SirenIcon from '@lucide/svelte/icons/siren';
+	import UsersIcon from '@lucide/svelte/icons/users';
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
 	import MenuIcon from '@lucide/svelte/icons/menu';
@@ -18,6 +25,9 @@
 	import { api, ApiError, type Stats } from '#lib/api/index.js';
 	import HexAvatar from '#lib/components/hex-avatar.svelte';
 	import Logo from '#lib/components/logo.svelte';
+	import NotificationBell from '#lib/components/notification-bell.svelte';
+	import { liveEvent, startLive } from '#lib/live/index.js';
+	import { loadViews, removeView, savedViews } from '#lib/stores/views.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Toaster } from '#lib/components/ui/sonner/index.js';
@@ -51,9 +61,17 @@
 		}
 	});
 
-	// Los contadores de la barra lateral se refrescan en cada navegación.
+	// Tiempo real mientras haya sesión; las vistas guardadas se cargan una vez.
+	$effect(() => {
+		if (!$user) return;
+		loadViews();
+		return startLive();
+	});
+
+	// Los contadores de la barra lateral se refrescan al navegar y con cada cambio en tiempo real.
 	$effect(() => {
 		void page.url.href;
+		void $liveEvent.seq;
 		if (!$isStaff) return;
 		api
 			.stats()
@@ -70,6 +88,8 @@
 		/** Parámetros de la URL que definen la vista; vacío = la lista sin filtros. */
 		params?: Record<string, string>;
 		count?: number;
+		/** El contador se resalta en rojo (algo requiere atención). */
+		alert?: boolean;
 	};
 
 	const unresolved = $derived(
@@ -105,12 +125,20 @@
 						icon: ClockIcon,
 						params: { status: 'waiting' },
 						count: stats?.by_status.waiting
+					},
+					{
+						href: resolve('/(app)/tickets?sla=breached'),
+						label: 'SLA vencido',
+						icon: SirenIcon,
+						params: { sla: 'breached' },
+						count: stats?.sla_breached,
+						alert: true
 					}
 				]
 			: [{ href: resolve('/(app)/tickets'), label: 'Mis tickets', icon: InboxIcon, params: {} }]
 	);
 
-	const filterKeys = ['status', 'priority', 'assignee'];
+	const filterKeys = ['status', 'priority', 'assignee', 'tag', 'sla', 'q'];
 
 	function isViewActive(view: View): boolean {
 		const path = page.url.pathname;
@@ -143,6 +171,39 @@
 			searchInput?.focus();
 		}
 	}
+
+	function isSavedViewActive(query: string): boolean {
+		if (page.url.pathname !== resolve('/(app)/tickets')) return false;
+		const params = new URLSearchParams(query);
+		return filterKeys.every(
+			(key) => (page.url.searchParams.get(key) ?? '') === (params.get(key) ?? '')
+		);
+	}
+
+	type Link = { href: string; label: string; icon: typeof InboxIcon };
+
+	const resources = $derived<Link[]>([
+		{ href: resolve('/help'), label: 'Base de conocimiento', icon: BookOpenIcon },
+		...($isStaff
+			? [
+					{
+						href: resolve('/(app)/macros'),
+						label: 'Respuestas guardadas',
+						icon: MessageSquareQuoteIcon
+					},
+					{ href: resolve('/(app)/reports'), label: 'Reportes', icon: ChartColumnIcon }
+				]
+			: [])
+	]);
+
+	const adminLinks = $derived<Link[]>(
+		$user?.role === 'admin'
+			? [
+					{ href: resolve('/(app)/admin/users'), label: 'Usuarios', icon: UsersIcon },
+					{ href: resolve('/(app)/admin/settings'), label: 'Configuración', icon: SettingsIcon }
+				]
+			: []
+	);
 
 	function logout() {
 		clearSession();
@@ -199,7 +260,10 @@
 							<span class="flex-1 truncate">{view.label}</span>
 							{#if view.count !== undefined && view.count > 0}
 								<span
-									class="rounded-full bg-white/10 px-2 py-0.5 text-[0.7rem] font-medium tabular-nums"
+									class={cn(
+										'rounded-full px-2 py-0.5 text-[0.7rem] font-medium tabular-nums',
+										view.alert ? 'bg-red-500/90 text-white' : 'bg-white/10'
+									)}
 								>
 									{view.count}
 								</span>
@@ -209,15 +273,81 @@
 				{/each}
 			</ul>
 		</div>
+
+		{#if $savedViews.length > 0}
+			<div>
+				<p
+					class="px-3 pb-2 text-[0.68rem] font-semibold tracking-wider text-sidebar-foreground/50 uppercase"
+				>
+					Mis vistas
+				</p>
+				<ul class="space-y-0.5">
+					{#each $savedViews as view (view.id)}
+						{@const active = isSavedViewActive(view.query)}
+						<li class="group relative">
+							<a
+								href={resolve(`/(app)/tickets${view.query as `?${string}`}`)}
+								aria-current={active ? 'page' : undefined}
+								class={cn('nav-item pr-9', active && 'nav-item-active')}
+							>
+								<FilterIcon class="size-4" aria-hidden="true" />
+								<span class="flex-1 truncate">{view.name}</span>
+							</a>
+							<button
+								type="button"
+								class="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-1 text-sidebar-foreground/60 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-white focus-visible:opacity-100"
+								aria-label={`Quitar la vista ${view.name}`}
+								onclick={() => removeView(view.id)}
+							>
+								<XIcon class="size-3.5" aria-hidden="true" />
+							</button>
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{/if}
+
+		{#each [{ title: 'Recursos', links: resources }, { title: 'Administración', links: adminLinks }] as section (section.title)}
+			{#if section.links.length > 0}
+				<div>
+					<p
+						class="px-3 pb-2 text-[0.68rem] font-semibold tracking-wider text-sidebar-foreground/50 uppercase"
+					>
+						{section.title}
+					</p>
+					<ul class="space-y-0.5">
+						{#each section.links as link (link.href)}
+							{@const active = page.url.pathname.startsWith(link.href)}
+							<li>
+								<a
+									href={link.href}
+									aria-current={active ? 'page' : undefined}
+									class={cn('nav-item', active && 'nav-item-active')}
+								>
+									<link.icon class="size-4" aria-hidden="true" />
+									<span class="flex-1 truncate">{link.label}</span>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
+		{/each}
 	</nav>
 
 	{#if $user}
 		<div class="flex items-center gap-3 border-t border-sidebar-border p-4">
-			<HexAvatar name={$user.name} id={$user.id} size="md" />
-			<div class="min-w-0 flex-1">
-				<p class="truncate text-sm font-medium text-white">{$user.name}</p>
-				<p class="text-xs text-sidebar-foreground/60">{roleLabels[$user.role]}</p>
-			</div>
+			<a
+				href={resolve('/(app)/profile')}
+				class="-m-1 flex min-w-0 flex-1 items-center gap-3 rounded-md p-1 hover:bg-sidebar-accent"
+				title="Mi perfil"
+			>
+				<HexAvatar name={$user.name} id={$user.id} size="md" />
+				<span class="min-w-0 flex-1">
+					<span class="block truncate text-sm font-medium text-white">{$user.name}</span>
+					<span class="block text-xs text-sidebar-foreground/60">{roleLabels[$user.role]}</span>
+				</span>
+			</a>
 			<button
 				type="button"
 				class="rounded-md p-2 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white"
@@ -311,7 +441,8 @@
 					>
 				</form>
 
-				<Button href={resolve('/(app)/tickets/new')} class="ml-auto shrink-0">
+				<div class="ml-auto"><NotificationBell /></div>
+				<Button href={resolve('/(app)/tickets/new')} class="shrink-0">
 					<PlusIcon aria-hidden="true" />
 					<span class="hidden sm:inline">Nuevo ticket</span>
 					<span class="sr-only sm:hidden">Nuevo ticket</span>
