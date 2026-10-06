@@ -45,7 +45,8 @@ services:
     volumes:
       - uploads:/data/uploads
     ports:
-      - "8080:8080"
+      # Solo local: en el servidor se entra por Caddy (HTTPS).
+      - "127.0.0.1:8080:8080"
 
 volumes:
   pgdata:
