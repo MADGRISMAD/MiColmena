@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Si llega un push nuevo a la misma rama, se cancela la ejecución anterior.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Las comprobaciones solo leen el código.
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (Go + PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Cada prueba crea su propio esquema en esta base y lo borra al terminar.
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Formato (gofmt)
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "Estos archivos no están formateados con gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Análisis estático (go vet)
+        run: go vet ./...
+
+      - name: Compilar
+        run: go build ./...
+
+      - name: Pruebas
+        run: go test -race -count=1 ./...
+
+  docker:
+    name: Imagen Docker del backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Solo construye para comprobar que el Dockerfile funciona; no publica nada.
+      - name: Construir imagen
+        run: docker build --tag micolmena-api:ci backend
+
+  frontend:
+    name: Frontend (SvelteKit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Con el npm 10 que trae Node 22, la instalación falla por un bug al resolver dependencias "peer".
+      - name: Actualizar npm
+        run: npm install --global npm@11
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Tipos (svelte-check)
+        run: npm run check
+
+      - name: Formato y lint
+        run: npm run lint
+
+      - name: Pruebas unitarias
+        run: npm run test:unit -- --run
+
+      - name: Instalar Chromium para Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas E2E
+        run: npm run test:e2e
+
+      - name: Guardar trazas si fallan las E2E
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces
+          path: frontend/test-results
+          if-no-files-found: ignore
+          retention-days: 7

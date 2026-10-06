@@ -92,6 +92,40 @@ Todas las rutas, salvo `health`, `register` y `login`, requieren `Authorization:
 
 Los clientes solo ven sus propios tickets.
 
+## Protección contra fuerza bruta
+
+`/api/auth/login` y `/api/auth/register` tienen dos límites. Al superarlos, la API responde `429 Too Many Requests` con la cabecera `Retry-After` (segundos).
+
+| Límite | Por defecto | Variable |
+|---|---|---|
+| Intentos por minuto y por IP (login y registro comparten el contador) | 10 | `AUTH_RATE_PER_MIN` |
+| Fallos de contraseña seguidos de un mismo email | 5 | `LOGIN_MAX_FAILURES` |
+| Duración del bloqueo de ese email | 15 min | `LOGIN_LOCKOUT` |
+
+Mientras un email está bloqueado, ni la contraseña correcta entra. Un login correcto reinicia su contador.
+
+**Si pones la API detrás de un proxy (Caddy, Nginx…), activa `TRUST_PROXY=true`.** Así se usa la IP real del cliente, que el proxy añade al final de `X-Forwarded-For`. Sin proxy déjalo en `false`: si no, cualquiera podría falsificar esa cabecera para esquivar el límite.
+
+Límites a tener en cuenta:
+- **El estado vive en la memoria de la API.** Sirve para una sola instancia; con varias habría que moverlo a Redis o PostgreSQL. Reiniciar la API lo borra.
+- **Bloquear por email permite molestar a alguien:** quien conozca tu email puede provocar un bloqueo de 15 minutos enviando contraseñas incorrectas. Es el costo de frenar la fuerza bruta; el bloqueo expira solo y no revela si la cuenta existe.
+- Las IPv6 se agrupan por bloque /64, porque una sola persona suele tener un bloque entero.
+
+## Pruebas
+
+```bash
+# Backend. Las pruebas de la API y la base de datos necesitan un PostgreSQL:
+export TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+cd backend && go test -race ./...
+
+# Frontend
+cd frontend && npm run check && npm run lint && npm run test:unit -- --run && npm run test:e2e
+```
+
+Cada prueba del backend crea su propio esquema de PostgreSQL y lo borra al terminar, así que no pisan los datos de esa base ni se pisan entre sí. Sin `TEST_DATABASE_URL`, esas pruebas se saltan y el resto corre normal.
+
+GitHub Actions ejecuta todo esto en cada push a `main` y en cada pull request (`.github/workflows/ci.yml`): formato, `go vet`, pruebas con `-race` contra PostgreSQL 16, construcción de la imagen Docker, y en el frontend tipos, lint, pruebas unitarias y E2E.
+
 ## Rendimiento
 
 - Las listas usan paginación por cursor (`before`), que sigue siendo rápida con millones de filas.
