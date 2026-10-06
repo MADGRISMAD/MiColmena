@@ -109,6 +109,12 @@ func (s *Server) createComment(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	if reopen {
+		if err := addEvent(r.Context(), tx, id, claims.UserID(), "status", ticket.Status, "open"); err != nil {
+			internalError(w, err)
+			return
+		}
+	}
 
 	c, err := scanComment(tx.QueryRow(r.Context(), commentSelect+" WHERE c.id = $1", commentID))
 	if err != nil {

@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"context"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -23,8 +24,9 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&applied); err != nil {
 		t.Fatal(err)
 	}
-	if applied != 1 {
-		t.Errorf("migraciones registradas = %d, se esperaba 1 (no deben repetirse)", applied)
+	files, _ := filepath.Glob("migrations/*.sql")
+	if applied != len(files) {
+		t.Errorf("migraciones registradas = %d, se esperaban %d (no deben repetirse)", applied, len(files))
 	}
 
 	for _, table := range []string{"users", "tickets", "ticket_comments"} {

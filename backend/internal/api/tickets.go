@@ -13,6 +13,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/MADGRISMAD/MiColmena/backend/internal/auth"
 )
 
 var (
@@ -39,6 +42,7 @@ type Ticket struct {
 	Category     string          `json:"category"`
 	Requester    UserRef         `json:"requester"`
 	Assignee     *UserRef        `json:"assignee"`
+	Tags         []string        `json:"tags"`
 	CustomFields json.RawMessage `json:"custom_fields"`
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
@@ -48,7 +52,7 @@ type Ticket struct {
 // ticketSelect une al solicitante y al agente asignado en una sola consulta (sin N+1).
 const ticketSelect = `
 	SELECT t.id, t.title, t.description, t.status, t.priority, t.category,
-	       r.id, r.name, a.id, a.name,
+	       r.id, r.name, a.id, a.name, t.tags,
 	       t.custom_fields, t.created_at, t.updated_at, t.resolved_at
 	FROM tickets t
 	JOIN users r ON r.id = t.requester_id
@@ -59,7 +63,7 @@ func scanTicket(row pgx.Row) (Ticket, error) {
 	var assigneeID *int64
 	var assigneeName *string
 	err := row.Scan(&t.ID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.Category,
-		&t.Requester.ID, &t.Requester.Name, &assigneeID, &assigneeName,
+		&t.Requester.ID, &t.Requester.Name, &assigneeID, &assigneeName, &t.Tags,
 		&t.CustomFields, &t.CreatedAt, &t.UpdatedAt, &t.ResolvedAt)
 	if assigneeID != nil {
 		t.Assignee = &UserRef{ID: *assigneeID, Name: *assigneeName}
@@ -69,7 +73,7 @@ func scanTicket(row pgx.Row) (Ticket, error) {
 
 // listTickets admite filtros y paginación por cursor:
 //
-//	?status=open&priority=high&assignee=me|none|<id>&q=texto&before=<id>&limit=25
+//	?status=open&priority=high&assignee=me|none|<id>&tag=vip&q=texto&before=<id>&limit=25
 //
 // La paginación por cursor (id < before) se mantiene rápida aunque haya millones de
 // tickets, a diferencia de OFFSET, que recorre todas las filas saltadas.
@@ -114,6 +118,9 @@ func (s *Server) listTickets(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		where = append(where, "t.assignee_id = "+arg(id))
+	}
+	if v := q.Get("tag"); v != "" {
+		where = append(where, "t.tags @> ARRAY["+arg(normalizeTag(v))+"]::text[]")
 	}
 	if v := strings.TrimSpace(q.Get("q")); v != "" {
 		where = append(where, "t.search @@ websearch_to_tsquery('spanish', "+arg(v)+")")
@@ -226,6 +233,16 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	category, err := s.canonicalCategory(r.Context(), in.Category)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if category == nil {
+		validationErrors{"category": "no es una categoría válida"}.write(w)
+		return
+	}
+
 	requester := claims.UserID()
 	if in.RequesterID != nil {
 		requester = *in.RequesterID
@@ -238,24 +255,180 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
 	var id int64
-	err := s.db.QueryRow(r.Context(), `
+	err = tx.QueryRow(r.Context(), `
 		INSERT INTO tickets (title, description, priority, category, custom_fields, requester_id)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id`,
-		in.Title, in.Description, in.Priority, strings.TrimSpace(in.Category), in.CustomFields, requester,
+		in.Title, in.Description, in.Priority, *category, in.CustomFields, requester,
 	).Scan(&id)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-
-	t, err := scanTicket(s.db.QueryRow(r.Context(), ticketSelect+" WHERE t.id = $1", id))
+	if err := addEvent(r.Context(), tx, id, claims.UserID(), "created", "", ""); err != nil {
+		internalError(w, err)
+		return
+	}
+	t, err := fetchTicket(r.Context(), tx, id)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	if err := tx.Commit(r.Context()); err != nil {
+		internalError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusCreated, t)
+}
+
+// ticketPatch son los cambios de un PATCH. Solo se aplican los campos enviados.
+type ticketPatch struct {
+	Title        *string         `json:"title"`
+	Description  *string         `json:"description"`
+	Status       *string         `json:"status"`
+	Priority     *string         `json:"priority"`
+	Category     *string         `json:"category"`
+	CustomFields json.RawMessage `json:"custom_fields"`
+	// null desasigna el ticket.
+	AssigneeID json.RawMessage `json:"assignee_id"`
+	Tags       *[]string       `json:"tags"`
+
+	// Rellenados por validate.
+	assigneeSet bool
+	assignee    *int64
+}
+
+// validate normaliza el patch y comprueba permisos y valores. Consulta la base para
+// validar el agente asignado y la categoría.
+func (s *Server) validatePatch(ctx context.Context, claims auth.Claims, p *ticketPatch) (validationErrors, error) {
+	errs := validationErrors{}
+	staffOnly := func(field string, present bool) {
+		errs.check(!present || claims.IsStaff(), field, "solo un agente puede cambiarlo")
+	}
+	staffOnly("priority", p.Priority != nil)
+	staffOnly("category", p.Category != nil)
+	staffOnly("custom_fields", p.CustomFields != nil)
+	staffOnly("assignee_id", p.AssigneeID != nil)
+	staffOnly("tags", p.Tags != nil)
+	// Un cliente solo puede cerrar su propio ticket, no moverlo a otros estados.
+	errs.check(p.Status == nil || claims.IsStaff() || *p.Status == "closed", "status", "solo puedes cerrar el ticket")
+
+	if p.Title != nil {
+		title := strings.TrimSpace(*p.Title)
+		errs.check(notBlank(title), "title", "es obligatorio")
+		errs.check(len(title) <= 200, "title", "debe tener como máximo 200 caracteres")
+		p.Title = &title
+	}
+	if p.Description != nil {
+		errs.check(len(*p.Description) <= 20000, "description", "es demasiado larga")
+	}
+	if p.Status != nil {
+		errs.check(slices.Contains(ticketStatuses, *p.Status), "status", "valor inválido")
+	}
+	if p.Priority != nil {
+		errs.check(slices.Contains(ticketPriorities, *p.Priority), "priority", "valor inválido")
+	}
+	if p.CustomFields != nil {
+		errs.check(isJSONObject(p.CustomFields), "custom_fields", "debe ser un objeto JSON")
+	}
+	if p.Tags != nil {
+		tags, msg := normalizeTags(*p.Tags)
+		errs.check(msg == "", "tags", msg)
+		p.Tags = &tags
+	}
+	if len(errs) > 0 {
+		return errs, nil
+	}
+
+	if p.Category != nil {
+		category, err := s.canonicalCategory(ctx, *p.Category)
+		if err != nil {
+			return nil, err
+		}
+		errs.check(category != nil, "category", "no es una categoría válida")
+		p.Category = category
+	}
+	if p.AssigneeID != nil {
+		p.assigneeSet = true
+		if string(p.AssigneeID) != "null" {
+			var assignee int64
+			if err := json.Unmarshal(p.AssigneeID, &assignee); err != nil {
+				errs.check(false, "assignee_id", "debe ser un número o null")
+			} else if exists, err := s.userExists(ctx, assignee, true); err != nil {
+				return nil, err
+			} else {
+				errs.check(exists, "assignee_id", "debe ser un agente o administrador activo")
+				p.assignee = &assignee
+			}
+		}
+	}
+	return errs, nil
+}
+
+// applyPatch guarda los cambios en la transacción y registra el historial.
+// current debe estar bloqueado (fetchTicketForUpdate) para que el historial sea coherente.
+func applyPatch(ctx context.Context, tx pgx.Tx, actorID int64, current Ticket, p ticketPatch) (Ticket, error) {
+	var sets []string
+	var args []any
+	set := func(col string, v any) {
+		args = append(args, v)
+		sets = append(sets, fmt.Sprintf("%s = $%d", col, len(args)))
+	}
+
+	if p.Title != nil {
+		set("title", *p.Title)
+	}
+	if p.Description != nil {
+		set("description", *p.Description)
+	}
+	if p.Status != nil {
+		set("status", *p.Status)
+		resolved := *p.Status == "resolved" || *p.Status == "closed"
+		wasResolved := current.Status == "resolved" || current.Status == "closed"
+		if resolved && !wasResolved {
+			sets = append(sets, "resolved_at = now()")
+		} else if !resolved {
+			sets = append(sets, "resolved_at = NULL")
+		}
+	}
+	if p.Priority != nil {
+		set("priority", *p.Priority)
+	}
+	if p.Category != nil {
+		set("category", *p.Category)
+	}
+	if p.CustomFields != nil {
+		set("custom_fields", p.CustomFields)
+	}
+	if p.assigneeSet {
+		set("assignee_id", p.assignee)
+	}
+	if p.Tags != nil {
+		set("tags", *p.Tags)
+	}
+	if len(sets) == 0 {
+		return current, nil
+	}
+
+	sets = append(sets, "updated_at = now()")
+	args = append(args, current.ID)
+	sql := fmt.Sprintf("UPDATE tickets SET %s WHERE id = $%d", strings.Join(sets, ", "), len(args))
+	if _, err := tx.Exec(ctx, sql, args...); err != nil {
+		return Ticket{}, err
+	}
+	updated, err := fetchTicket(ctx, tx, current.ID)
+	if err != nil {
+		return Ticket{}, err
+	}
+	return updated, recordChanges(ctx, tx, actorID, current, updated)
 }
 
 // updateTicket aplica solo los campos enviados. Para desasignar, enviar "assignee_id": null.
@@ -264,122 +437,224 @@ func (s *Server) updateTicket(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	current, ok := s.loadTicket(w, r, id)
-	if !ok {
+	if _, ok := s.loadTicket(w, r, id); !ok {
 		return
 	}
 	claims := claimsFrom(r)
 
+	var in ticketPatch
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	errs, err := s.validatePatch(r.Context(), claims, &in)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if errs.write(w) {
+		return
+	}
+
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	current, err := fetchTicketForUpdate(r.Context(), tx, id)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	updated, err := applyPatch(r.Context(), tx, claims.UserID(), current, in)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+const maxBulkTickets = 100
+
+// bulkUpdateTickets aplica el mismo cambio a varios tickets a la vez (solo agentes).
+func (s *Server) bulkUpdateTickets(w http.ResponseWriter, r *http.Request) {
+	claims := claimsFrom(r)
 	var in struct {
-		Title        *string         `json:"title"`
-		Description  *string         `json:"description"`
-		Status       *string         `json:"status"`
-		Priority     *string         `json:"priority"`
-		Category     *string         `json:"category"`
-		CustomFields json.RawMessage `json:"custom_fields"`
-		AssigneeID   json.RawMessage `json:"assignee_id"`
+		IDs        []int64         `json:"ids"`
+		Status     *string         `json:"status"`
+		Priority   *string         `json:"priority"`
+		AssigneeID json.RawMessage `json:"assignee_id"`
+		AddTags    []string        `json:"add_tags"`
 	}
 	if !decodeJSON(w, r, &in) {
 		return
 	}
 
-	var sets []string
-	var args []any
-	set := func(col string, v any) {
-		args = append(args, v)
-		sets = append(sets, fmt.Sprintf("%s = $%d", col, len(args)))
-	}
-
 	errs := validationErrors{}
-	staffOnly := func(field string, present bool) {
-		errs.check(!present || claims.IsStaff(), field, "solo un agente puede cambiarlo")
-	}
-	staffOnly("priority", in.Priority != nil)
-	staffOnly("category", in.Category != nil)
-	staffOnly("custom_fields", in.CustomFields != nil)
-	staffOnly("assignee_id", in.AssigneeID != nil)
-	// Un cliente solo puede cerrar su propio ticket, no moverlo a otros estados.
-	errs.check(in.Status == nil || claims.IsStaff() || *in.Status == "closed", "status", "solo puedes cerrar el ticket")
-
-	if in.Title != nil {
-		title := strings.TrimSpace(*in.Title)
-		errs.check(notBlank(title), "title", "es obligatorio")
-		errs.check(len(title) <= 200, "title", "debe tener como máximo 200 caracteres")
-		set("title", title)
-	}
-	if in.Description != nil {
-		errs.check(len(*in.Description) <= 20000, "description", "es demasiado larga")
-		set("description", *in.Description)
-	}
-	if in.Status != nil {
-		errs.check(slices.Contains(ticketStatuses, *in.Status), "status", "valor inválido")
-		set("status", *in.Status)
-		resolved := *in.Status == "resolved" || *in.Status == "closed"
-		wasResolved := current.Status == "resolved" || current.Status == "closed"
-		if resolved && !wasResolved {
-			sets = append(sets, "resolved_at = now()")
-		} else if !resolved {
-			sets = append(sets, "resolved_at = NULL")
-		}
-	}
-	if in.Priority != nil {
-		errs.check(slices.Contains(ticketPriorities, *in.Priority), "priority", "valor inválido")
-		set("priority", *in.Priority)
-	}
-	if in.Category != nil {
-		errs.check(len(*in.Category) <= 100, "category", "debe tener como máximo 100 caracteres")
-		set("category", strings.TrimSpace(*in.Category))
-	}
-	if in.CustomFields != nil {
-		errs.check(isJSONObject(in.CustomFields), "custom_fields", "debe ser un objeto JSON")
-		set("custom_fields", in.CustomFields)
-	}
-	if in.AssigneeID != nil && claims.IsStaff() {
-		if string(in.AssigneeID) == "null" {
-			set("assignee_id", nil)
-		} else {
-			var assignee int64
-			if err := json.Unmarshal(in.AssigneeID, &assignee); err != nil {
-				errs.check(false, "assignee_id", "debe ser un número o null")
-			} else if exists, err := s.userExists(r.Context(), assignee, true); err != nil {
-				internalError(w, err)
-				return
-			} else {
-				errs.check(exists, "assignee_id", "debe ser un agente o administrador")
-				set("assignee_id", assignee)
-			}
-		}
-	}
+	errs.check(len(in.IDs) > 0, "ids", "elige al menos un ticket")
+	errs.check(len(in.IDs) <= maxBulkTickets, "ids", fmt.Sprintf("como máximo %d tickets a la vez", maxBulkTickets))
+	addTags, msg := normalizeTags(in.AddTags)
+	errs.check(msg == "", "add_tags", msg)
 	if errs.write(w) {
 		return
 	}
-	if len(sets) == 0 {
-		writeJSON(w, http.StatusOK, current)
-		return
-	}
 
-	sets = append(sets, "updated_at = now()")
-	args = append(args, id)
-	sql := fmt.Sprintf("UPDATE tickets SET %s WHERE id = $%d", strings.Join(sets, ", "), len(args))
-	if _, err := s.db.Exec(r.Context(), sql, args...); err != nil {
-		internalError(w, err)
-		return
-	}
-
-	t, err := scanTicket(s.db.QueryRow(r.Context(), ticketSelect+" WHERE t.id = $1", id))
+	p := ticketPatch{Status: in.Status, Priority: in.Priority, AssigneeID: in.AssigneeID}
+	errs, err := s.validatePatch(r.Context(), claims, &p)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, t)
+	if errs.write(w) {
+		return
+	}
+
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	ids := slices.Clone(in.IDs)
+	slices.Sort(ids) // Mismo orden de bloqueo en todas las peticiones: evita interbloqueos.
+	ids = slices.Compact(ids)
+	updated := 0
+	for _, id := range ids {
+		current, err := fetchTicketForUpdate(r.Context(), tx, id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		patch := p
+		if len(addTags) > 0 {
+			merged, msg := normalizeTags(append(slices.Clone(current.Tags), addTags...))
+			if msg != "" {
+				validationErrors{"add_tags": fmt.Sprintf("el ticket #%d: %s", id, msg)}.write(w)
+				return
+			}
+			patch.Tags = &merged
+		}
+		if _, err := applyPatch(r.Context(), tx, claims.UserID(), current, patch); err != nil {
+			internalError(w, err)
+			return
+		}
+		updated++
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"updated": updated})
 }
 
-// userExists comprueba si existe el usuario; con staff=true exige que sea agente o administrador.
+// listTags devuelve las etiquetas en uso con cuántos tickets las tienen.
+func (s *Server) listTags(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.db.Query(r.Context(), `
+		SELECT tag, count(*) FROM tickets, unnest(tags) AS tag
+		GROUP BY tag ORDER BY count(*) DESC, tag
+		LIMIT 200`)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	type tagCount struct {
+		Name  string `json:"name"`
+		Count int    `json:"count"`
+	}
+	tags, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (tagCount, error) {
+		var t tagCount
+		err := row.Scan(&t.Name, &t.Count)
+		return t, err
+	})
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if tags == nil {
+		tags = []tagCount{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": tags})
+}
+
+const (
+	maxTags      = 10
+	maxTagLength = 30
+)
+
+// normalizeTag pasa a minúsculas y cambia los espacios por guiones: "Cliente VIP" → "cliente-vip".
+func normalizeTag(tag string) string {
+	return strings.Join(strings.Fields(strings.ToLower(tag)), "-")
+}
+
+// normalizeTags normaliza y quita duplicados. Devuelve un mensaje si algo no es válido.
+func normalizeTags(in []string) ([]string, string) {
+	out := []string{}
+	for _, raw := range in {
+		tag := normalizeTag(raw)
+		if tag == "" || slices.Contains(out, tag) {
+			continue
+		}
+		if len([]rune(tag)) > maxTagLength {
+			return nil, fmt.Sprintf("cada etiqueta debe tener como máximo %d caracteres", maxTagLength)
+		}
+		out = append(out, tag)
+	}
+	if len(out) > maxTags {
+		return nil, fmt.Sprintf("como máximo %d etiquetas", maxTags)
+	}
+	return out, ""
+}
+
+// querier es lo que comparten el pool y una transacción.
+type querier interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func fetchTicket(ctx context.Context, q querier, id int64) (Ticket, error) {
+	return scanTicket(q.QueryRow(ctx, ticketSelect+" WHERE t.id = $1", id))
+}
+
+// fetchTicketForUpdate lee el ticket y bloquea su fila hasta el final de la transacción.
+func fetchTicketForUpdate(ctx context.Context, tx pgx.Tx, id int64) (Ticket, error) {
+	return scanTicket(tx.QueryRow(ctx, ticketSelect+" WHERE t.id = $1 FOR UPDATE OF t", id))
+}
+
+// canonicalCategory devuelve el nombre tal como está en la lista de categorías, "" si viene vacía,
+// o nil si no existe.
+func (s *Server) canonicalCategory(ctx context.Context, category string) (*string, error) {
+	category = strings.TrimSpace(category)
+	if category == "" {
+		return &category, nil
+	}
+	var name string
+	err := s.db.QueryRow(ctx, `SELECT name FROM categories WHERE lower(name) = lower($1)`, category).Scan(&name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &name, nil
+}
+
+// userExists comprueba si existe el usuario activo; con staff=true exige que sea agente o administrador.
 func (s *Server) userExists(ctx context.Context, id int64, staff bool) (bool, error) {
 	var exists bool
 	err := s.db.QueryRow(ctx, `
 		SELECT EXISTS (
-			SELECT 1 FROM users WHERE id = $1 AND (NOT $2 OR role IN ('agent', 'admin'))
+			SELECT 1 FROM users
+			WHERE id = $1 AND active AND (NOT $2 OR role IN ('agent', 'admin'))
 		)`, id, staff).Scan(&exists)
 	return exists, err
 }

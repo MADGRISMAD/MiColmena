@@ -73,16 +73,32 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/auth/register", s.limitAuth(s.register))
 	mux.Handle("POST /api/auth/login", s.limitAuth(s.login))
 	mux.Handle("GET /api/me", s.authed(s.me))
+	mux.Handle("PATCH /api/me", s.authed(s.updateMe))
+	mux.Handle("POST /api/me/password", s.authed(s.changePassword))
 
 	mux.Handle("GET /api/tickets", s.authed(s.listTickets))
 	mux.Handle("POST /api/tickets", s.authed(s.createTicket))
 	mux.Handle("GET /api/tickets/{id}", s.authed(s.getTicket))
 	mux.Handle("PATCH /api/tickets/{id}", s.authed(s.updateTicket))
+	mux.Handle("POST /api/tickets/bulk", s.staffOnly(s.bulkUpdateTickets))
+	mux.Handle("GET /api/tickets/{id}/events", s.authed(s.listEvents))
 	mux.Handle("GET /api/tickets/{id}/comments", s.authed(s.listComments))
 	mux.Handle("POST /api/tickets/{id}/comments", s.authed(s.createComment))
 
 	mux.Handle("GET /api/users", s.staffOnly(s.listUsers))
+	mux.Handle("POST /api/users", s.adminOnly(s.createUser))
+	mux.Handle("PATCH /api/users/{id}", s.adminOnly(s.updateUser))
 	mux.Handle("PATCH /api/users/{id}/role", s.adminOnly(s.updateUserRole))
+
+	mux.Handle("GET /api/tags", s.staffOnly(s.listTags))
+	mux.Handle("GET /api/categories", s.authed(s.listCategories))
+	mux.Handle("POST /api/categories", s.adminOnly(s.createCategory))
+	mux.Handle("PATCH /api/categories/{id}", s.adminOnly(s.renameCategory))
+	mux.Handle("DELETE /api/categories/{id}", s.adminOnly(s.deleteCategory))
+	mux.Handle("GET /api/macros", s.staffOnly(s.listMacros))
+	mux.Handle("POST /api/macros", s.staffOnly(s.createMacro))
+	mux.Handle("PATCH /api/macros/{id}", s.staffOnly(s.updateMacro))
+	mux.Handle("DELETE /api/macros/{id}", s.staffOnly(s.deleteMacro))
 	mux.Handle("GET /api/stats", s.staffOnly(s.stats))
 
 	return s.recoverer(s.logger(s.cors(mux)))
@@ -182,14 +198,25 @@ func (s *Server) authed(next http.HandlerFunc) http.Handler {
 		}
 		// El rol se lee de la base de datos (búsqueda por clave primaria) para que
 		// un cambio de rol o un usuario eliminado se apliquen sin esperar a que expire el token.
+		var active bool
+		var validAfter time.Time
 		if err := s.db.QueryRow(r.Context(),
-			`SELECT role FROM users WHERE id = $1`, claims.UserID(),
-		).Scan(&claims.Role); err != nil {
+			`SELECT role, active, tokens_valid_after FROM users WHERE id = $1`, claims.UserID(),
+		).Scan(&claims.Role, &active, &validAfter); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeError(w, http.StatusUnauthorized, "el usuario ya no existe")
 				return
 			}
 			internalError(w, err)
+			return
+		}
+		if !active {
+			writeError(w, http.StatusUnauthorized, "esta cuenta está desactivada")
+			return
+		}
+		// Un cambio de contraseña invalida los tokens emitidos antes.
+		if claims.IssuedAt == nil || claims.IssuedAt.Before(validAfter) {
+			writeError(w, http.StatusUnauthorized, "la sesión ya no es válida, vuelve a iniciar sesión")
 			return
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), claimsKey{}, claims)))
