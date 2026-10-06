@@ -35,9 +35,32 @@ MiColmena/
 | Base de datos | PostgreSQL 16 |
 | Autenticación | JWT + contraseñas con bcrypt |
 
-## Levantar el frontend
+## Correr el proyecto en local
 
-Requiere Node.js 22+ y npm 11+ (`npm install -g npm@11`).
+Necesitas **Node.js 22+ con npm 11+** (`npm install -g npm@11`; con el npm 10 que trae Node 22 la instalación falla), **Go 1.26** (Go descarga solo la versión correcta si tienes 1.21 o más) y **Docker** o un PostgreSQL propio.
+
+Se usan tres terminales:
+
+**1. Base de datos**
+
+```bash
+docker compose up -d db
+```
+
+Crea PostgreSQL con el usuario, la contraseña y la base `micolmena`, que coinciden con `backend/.env.example`. Sin Docker, crea tú ese usuario y esa base en tu PostgreSQL, o cambia `DATABASE_URL` en `backend/.env`.
+
+**2. API** (en `http://localhost:8080`)
+
+```bash
+cd backend
+cp .env.example .env
+set -a; . ./.env; set +a     # Linux, macOS, WSL o Git Bash
+go run ./cmd/api
+```
+
+Aplica las migraciones solo y crea un administrador: `admin@micolmena.local` con la contraseña `cambia-esta-contraseña` (se cambian en `.env`).
+
+**3. Frontend** (en `http://localhost:5173`)
 
 ```bash
 cd frontend
@@ -45,12 +68,11 @@ npm install
 npm run dev
 ```
 
-Abre http://localhost:5173. Las llamadas a `/api` van al backend en `:8080`.
-Más detalles en [`frontend/README.md`](frontend/README.md).
+Abre http://localhost:5173. Las llamadas a `/api` se redirigen solas al backend en `:8080`. Inicia sesión con el administrador, que ve todo igual que un agente. Para probar la vista de cliente, crea otra cuenta desde "Crear cuenta". Convertir a alguien en agente se hace por ahora con la API (`PATCH /api/users/{id}/role`, como administrador).
 
-## Levantar el backend
+**Si te bloquea el login mientras pruebas:** son los límites contra fuerza bruta (ver más abajo). Reinicia la API para borrar el bloqueo, o sube `AUTH_RATE_PER_MIN` y `LOGIN_MAX_FAILURES` en `backend/.env`.
 
-Con Docker (PostgreSQL + API):
+### Todo en Docker
 
 ```bash
 echo "JWT_SECRET=$(openssl rand -hex 32)" > .env
@@ -59,16 +81,7 @@ echo "ADMIN_PASSWORD=una-contraseña-segura" >> .env
 docker compose up -d
 ```
 
-Sin Docker (con PostgreSQL ya instalado):
-
-```bash
-cd backend
-cp .env.example .env   # y edita los valores
-set -a; . ./.env; set +a
-go run ./cmd/api
-```
-
-Las migraciones se aplican solas al arrancar.
+Levanta PostgreSQL y la API (`:8080`). El frontend se corre aparte con `npm run dev`, como arriba. Más detalles en [`frontend/README.md`](frontend/README.md).
 
 ## API
 
