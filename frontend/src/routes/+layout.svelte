@@ -8,7 +8,6 @@
 
 <svelte:head>
 	<title>MiColmena</title>
-	<link rel="icon" type="image/png" href="/favicon.png" />
 </svelte:head>
 
 <ModeWatcher />

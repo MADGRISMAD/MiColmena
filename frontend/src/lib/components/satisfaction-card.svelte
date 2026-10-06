@@ -13,7 +13,13 @@
 	let sending = $state(false);
 	let editing = $state(false);
 
+	// Solo se sincroniza cuando cambia la valoración guardada: recargar el ticket en tiempo real
+	// no debe borrar lo que el cliente está eligiendo.
+	let synced: string | null = null;
 	$effect(() => {
+		const saved = `${ticket.satisfaction}|${ticket.satisfaction_comment}`;
+		if (saved === synced) return;
+		synced = saved;
 		rating = ticket.satisfaction;
 		comment = ticket.satisfaction_comment;
 	});

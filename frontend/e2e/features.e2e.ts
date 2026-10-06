@@ -144,6 +144,7 @@ test('el administrador ve la gestión de usuarios', async ({ page }) => {
 test('recuperar la contraseña desde el login', async ({ page }) => {
 	await page.goto('/login');
 	await page.getByRole('link', { name: '¿Olvidaste tu contraseña?' }).click();
+	await expect(page.getByRole('heading', { name: 'Recuperar contraseña' })).toBeVisible();
 	await page.getByLabel('Email').fill('ana@micolmena.dev');
 	await page.getByRole('button', { name: 'Enviar enlace' }).click();
 	await expect(page.getByText(/recibirás el enlace/)).toBeVisible();

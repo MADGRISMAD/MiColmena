@@ -28,7 +28,7 @@
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { formatDateTime, formatRelative, priorityLabels, statusLabels } from '#lib/format.js';
-	import { liveEvent } from '#lib/live/index.js';
+	import { onLive } from '#lib/live/index.js';
 	import { cn } from '#lib/utils.js';
 	import { isStaff } from '#lib/stores/auth.js';
 	import { saveView } from '#lib/stores/views.js';
@@ -78,13 +78,12 @@
 	});
 
 	// En tiempo real: si cambia un ticket, se recarga la lista sin parpadeos.
-	let lastSeq = $liveEvent.seq;
-	$effect(() => {
-		const { seq } = $liveEvent;
-		if (seq === lastSeq) return;
-		lastSeq = seq;
-		if (!loadingMore && nextCursor === null) load(filters, false, true);
-	});
+	$effect(() =>
+		onLive((event) => {
+			if (event.type === 'notification') return;
+			if (!loadingMore && nextCursor === null) load(filters, false, true);
+		})
+	);
 
 	$effect(() => {
 		if (!$isStaff) return;

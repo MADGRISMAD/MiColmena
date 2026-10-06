@@ -51,7 +51,7 @@
 		statusLabels
 	} from '#lib/format.js';
 	import { apiForm } from '#lib/forms.js';
-	import { liveEvent } from '#lib/live/index.js';
+	import { onLive, refreshNotifications } from '#lib/live/index.js';
 	import { fillMacro, mentionQuery } from '#lib/macros.js';
 	import { commentSchema, emptyComment } from '#lib/schemas.js';
 	import { slaState } from '#lib/sla.js';
@@ -93,7 +93,10 @@
 			events = e.items;
 			attachments = a.items;
 			// Abrir el ticket marca como leídas sus notificaciones.
-			api.readNotifications({ ticket_id: id }).catch(() => {});
+			api
+				.readNotifications({ ticket_id: id })
+				.then(refreshNotifications)
+				.catch(() => {});
 		} catch (err) {
 			if (quiet) return;
 			error =
@@ -110,15 +113,13 @@
 	});
 
 	// Si otra persona cambia este ticket, se ve al momento.
-	let lastSeq = $liveEvent.seq;
-	$effect(() => {
-		const { seq, event } = $liveEvent;
-		if (seq === lastSeq) return;
-		lastSeq = seq;
-		if (event.type === 'reconnect' || (event.type === 'ticket' && event.ticket_id === ticketId)) {
-			load(ticketId, true);
-		}
-	});
+	$effect(() =>
+		onLive((event) => {
+			if (event.type === 'reconnect' || (event.type === 'ticket' && event.ticket_id === ticketId)) {
+				load(ticketId, true);
+			}
+		})
+	);
 
 	$effect(() => {
 		api
@@ -764,7 +765,7 @@
 										<span class="text-muted-foreground">—</span>
 									{:else}
 										<span title={formatDateTime(ticket.first_response_due)}>
-											antes de {formatRelative(ticket.first_response_due)}
+											{formatRelative(ticket.first_response_due)}
 										</span>
 									{/if}
 								</dd>

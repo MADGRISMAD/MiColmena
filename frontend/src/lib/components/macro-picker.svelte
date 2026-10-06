@@ -31,6 +31,9 @@
 	onclick={(e) => {
 		if (open && root && !root.contains(e.target as Node)) open = false;
 	}}
+	onkeydown={(e) => {
+		if (open && e.key === 'Escape') open = false;
+	}}
 />
 
 <div class="relative" bind:this={root}>

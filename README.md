@@ -2,6 +2,20 @@
 
 Plataforma de gestión de tickets de soporte y atención al cliente.
 
+## Funciones
+
+- **Tickets** con estados, prioridades, categorías, etiquetas y búsqueda en español.
+- **Conversación** con respuestas públicas, notas internas, menciones `@Nombre`, adjuntos e historial de cambios.
+- **Respuestas guardadas** con variables (`{{solicitante}}`, `{{agente}}`, `{{ticket}}`) que también pueden cambiar el estado.
+- **Acciones masivas** (estado, prioridad, asignación, etiquetas) y **vistas guardadas** por usuario.
+- **SLA** por prioridad: plazos de primera respuesta y resolución, aviso de riesgo y vista de vencidos.
+- **Encuesta de satisfacción** al resolver.
+- **Notificaciones** en la app (campana) y por correo, y **tiempo real**: lo que otro cambia se ve sin recargar.
+- **Centro de ayuda** público con buscador; al abrir un ticket se sugieren artículos.
+- **Reportes** por periodo (volumen, tiempos, SLA, satisfacción, por agente y categoría) y **exportación a CSV**.
+- **Administración**: alta de agentes, roles, desactivar cuentas, categorías y plazos de SLA.
+- **Cuenta**: perfil, cambio de contraseña (cierra las demás sesiones) y recuperación por correo.
+
 ## Estructura
 
 ```
@@ -90,20 +104,39 @@ Todas las rutas, salvo `health`, `register` y `login`, requieren `Authorization:
 | Método | Ruta | Quién | Descripción |
 |---|---|---|---|
 | GET | `/api/health` | todos | Estado del servicio y la base de datos |
-| POST | `/api/auth/register` | todos | Crea una cuenta de cliente |
-| POST | `/api/auth/login` | todos | Devuelve un token |
-| GET | `/api/me` | autenticado | Usuario actual |
-| GET | `/api/tickets` | autenticado | Lista con filtros `status`, `priority`, `assignee` (`me`, `none` o id), `q` (búsqueda), `before` (cursor), `limit` |
+| POST | `/api/auth/register` · `login` | todos | Crea una cuenta de cliente / devuelve un token |
+| POST | `/api/auth/forgot` · `reset` | todos | Envía el enlace de recuperación / cambia la contraseña con él |
+| GET, PATCH | `/api/me` | autenticado | Usuario actual; cambiar nombre, email (pide la contraseña) y avisos por correo |
+| POST | `/api/me/password` | autenticado | Cambia la contraseña y devuelve un token nuevo |
+| GET | `/api/tickets` | autenticado | Lista con filtros `status`, `priority`, `assignee` (`me`, `none` o id), `tag`, `sla=breached`, `q`, `before` (cursor), `limit` |
 | POST | `/api/tickets` | autenticado | Crea un ticket |
-| GET | `/api/tickets/{id}` | autenticado | Detalle |
-| PATCH | `/api/tickets/{id}` | autenticado | Edita; los clientes solo cambian título y descripción, o cierran |
-| GET | `/api/tickets/{id}/comments` | autenticado | Comentarios (los clientes no ven las notas internas) |
-| POST | `/api/tickets/{id}/comments` | autenticado | Agrega un comentario o una nota interna |
-| GET | `/api/users?role=agent` | agentes | Lista de usuarios |
-| PATCH | `/api/users/{id}/role` | admin | Cambia el rol (`admin`, `agent`, `customer`) |
+| GET, PATCH | `/api/tickets/{id}` | autenticado | Detalle y edición; los clientes solo cambian título y descripción, o cierran |
+| POST | `/api/tickets/bulk` | agentes | Mismo cambio a varios tickets |
+| GET, POST | `/api/tickets/{id}/comments` | autenticado | Comentarios (los clientes no ven las notas internas) |
+| GET | `/api/tickets/{id}/events` | autenticado | Historial de cambios |
+| GET, POST | `/api/tickets/{id}/attachments` | autenticado | Adjuntos (multipart, campo `file` y opcional `comment_id`) |
+| GET, DELETE | `/api/attachments/{id}` | autenticado | Descargar o borrar un adjunto |
+| POST | `/api/tickets/{id}/satisfaction` | solicitante | Valoración `good` o `bad` con comentario |
+| GET | `/api/notifications` · POST `/read` | autenticado | Notificaciones y marcarlas como leídas |
+| GET | `/api/stream` | autenticado | Avisos en tiempo real (Server-Sent Events) |
+| GET, POST, DELETE | `/api/views` | autenticado | Vistas guardadas |
+| GET | `/api/users` | agentes | Usuarios (`role`, `q`, `active=all`) |
+| POST, PATCH | `/api/users`, `/api/users/{id}` | admin | Crear usuarios; cambiar datos, rol, contraseña o desactivar |
 | GET | `/api/stats` | agentes | Números del dashboard |
+| GET | `/api/tags` | agentes | Etiquetas en uso |
+| GET · POST, PATCH, DELETE | `/api/categories` | todos · admin | Categorías |
+| GET, POST, PATCH, DELETE | `/api/macros` | agentes | Respuestas guardadas |
+| GET · PUT | `/api/sla` | agentes · admin | Plazos por prioridad |
+| GET | `/api/reports`, `/api/reports/tickets.csv` | agentes | Reporte por rango (`from`, `to`, `tz`) y exportación |
+| GET · POST, PATCH, DELETE | `/api/articles` | todos · agentes | Centro de ayuda (sin sesión, solo los publicados) |
 
 Los clientes solo ven sus propios tickets.
+
+## Correo y adjuntos
+
+- **Correo.** Los avisos se guardan en una cola (`email_outbox`) dentro de la misma transacción y un proceso de la API los envía con reintentos. Configura `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` y `SMTP_FROM` con los datos de tu proveedor (Brevo, Resend, Amazon SES…), y `APP_URL` con la dirección del frontend para los enlaces. **Sin `SMTP_HOST` los correos no se envían: se escriben en el log**, útil en desarrollo para copiar el enlace de recuperación. Para que no lleguen a spam necesitarás un dominio propio con SPF y DKIM.
+- **Adjuntos.** Se guardan en disco en `UPLOAD_DIR` (en Docker, el volumen `uploads`) con un tamaño máximo de `MAX_UPLOAD_MB` (10 MB por defecto). Inclúyelos en las copias de seguridad junto con la base de datos.
+- **Tiempo real.** Los avisos viven en la memoria de la API: con varias instancias, cada una solo avisa a sus conexiones. Si pones Nginx delante, desactiva el buffering para `/api/stream` (la API ya envía `X-Accel-Buffering: no`).
 
 ## Protección contra fuerza bruta
 

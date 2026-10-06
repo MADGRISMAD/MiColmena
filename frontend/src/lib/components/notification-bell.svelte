@@ -11,7 +11,7 @@
 	import UserRoundCheckIcon from '@lucide/svelte/icons/user-round-check';
 	import { api, type Notification, type NotificationKind } from '#lib/api/index.js';
 	import { formatRelative } from '#lib/format.js';
-	import { liveEvent } from '#lib/live/index.js';
+	import { liveEvent, notificationsVersion } from '#lib/live/index.js';
 	import { cn } from '#lib/utils.js';
 
 	let items = $state<Notification[]>([]);
@@ -32,6 +32,7 @@
 	// Se recarga al abrir la app, con cada aviso en tiempo real y al cambiar de página.
 	$effect(() => {
 		void $liveEvent.seq;
+		void $notificationsVersion;
 		void page.url.pathname;
 		load();
 	});

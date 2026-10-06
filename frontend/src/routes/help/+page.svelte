@@ -40,7 +40,7 @@
 
 <svelte:head><title>Centro de ayuda · MiColmena</title></svelte:head>
 
-<section class="bg-honeycomb -mx-4 mb-10 rounded-2xl border px-6 py-12 text-center">
+<section class="bg-honeycomb mb-10 rounded-2xl border px-5 py-10 text-center sm:px-6 sm:py-12">
 	<h1 class="text-3xl font-bold tracking-tight">¿En qué podemos ayudarte?</h1>
 	<p class="mt-2 text-muted-foreground">Busca en las guías del equipo de soporte.</p>
 	<form role="search" class="relative mx-auto mt-6 max-w-xl" onsubmit={search}>
