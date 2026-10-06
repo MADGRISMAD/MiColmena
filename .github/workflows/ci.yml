@@ -83,6 +83,42 @@ jobs:
       - name: Construir imagen
         run: docker build --tag micolmena-api:ci backend
 
+  # El frontend lo publica Vercel solo; aquí se publica el backend en el VPS.
+  deploy-backend:
+    name: Publicar backend en el VPS
+    needs: [backend, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HOST: ubuntu@15.235.62.27
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Llave SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # El .env y los datos viven solo en el servidor: no se tocan.
+      - name: Subir código
+        run: rsync -az --delete --exclude .env --exclude data/ backend docker-compose.yml "$HOST:~/micolmena/"
+
+      # Compose solo recrea la API si la imagen cambió; luego se borran las imágenes viejas.
+      - name: Reconstruir y arrancar
+        run: ssh "$HOST" 'cd ~/micolmena && docker compose up -d --build && docker image prune -f'
+
+      - name: Comprobar que responde
+        run: curl -fsS --retry 10 --retry-delay 3 --retry-all-errors https://vps-c435342e.vps.ovh.ca/api/health
+
   frontend:
     name: Frontend (SvelteKit)
     runs-on: ubuntu-latest
