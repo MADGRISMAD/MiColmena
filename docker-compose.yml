@@ -41,7 +41,7 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:-MiColmena <no-reply@localhost>}
+      SMTP_FROM: ${SMTP_FROM:-BeHIve <no-reply@localhost>}
     volumes:
       - uploads:/data/uploads
     ports:

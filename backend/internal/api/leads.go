@@ -26,7 +26,7 @@ type Lead struct {
 	// Lo elegido en la calculadora de precios; 0 = no lo indicó.
 	Agents int `json:"agents"`
 	People int `json:"people"`
-	// OrgID: si la pidió una empresa que ya usa MiColmena (ampliar plan).
+	// OrgID: si la pidió una empresa que ya usa BeHIve (ampliar plan).
 	OrgID     *int64    `json:"org_id"`
 	Handled   bool      `json:"handled"`
 	CreatedAt time.Time `json:"created_at"`

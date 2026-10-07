@@ -39,7 +39,7 @@
 	}
 </script>
 
-<svelte:head><title>Nueva contraseña · MiColmena</title></svelte:head>
+<svelte:head><title>Nueva contraseña · BeHIve</title></svelte:head>
 
 <AuthCard title="Elige una contraseña nueva" description="Después entrarás directamente.">
 	{#if !token || errors.token}

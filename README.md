@@ -1,4 +1,4 @@
-# MiColmena
+# BeHIve
 
 Plataforma de gestión de tickets de soporte y atención al cliente.
 
@@ -20,6 +20,8 @@ Plataforma de gestión de tickets de soporte y atención al cliente.
 - **Multiempresa**: cada empresa se registra sola en `/signup`, tiene su portal (`/e/<empresa>`), sus usuarios, tickets, categorías, SLA, respuestas guardadas y artículos, y no ve nada de las demás.
 - **Planes**: límite de agentes por empresa, página *Tu plan* con el uso y solicitud de ampliación, y una sola sesión a la vez por agente.
 - **Cuenta**: perfil, cambio de contraseña (cierra las demás sesiones) y recuperación por correo.
+
+> **Nombre.** El producto se llama BeHIve. Por compatibilidad se conservan los identificadores técnicos que ya existen (el repositorio y el módulo de Go `MiColmena`, la base y el usuario de PostgreSQL `micolmena`, la carpeta `~/micolmena` del servidor, las claves `micolmena_*` del navegador y el emisor del token): cambiarlos exige migrar el servidor y cerraría las sesiones abiertas. Los ejemplos con `micolmena.com` son de la dirección anterior: usa tu dominio.
 
 ## Estructura
 
@@ -150,7 +152,7 @@ Los clientes solo ven sus propios tickets. Todo se filtra por la empresa del usu
 
 ## Multiempresa y planes
 
-- **Empresa 1 = la plataforma (MiColmena).** La migración `008_organizations.sql` mueve ahí los datos que ya existían. Sus administradores permanentes (`ADMIN_EMAIL` y los de `permanent.go`) ven *Plataforma → Empresas* y *Solicitudes de demo*: ahí ajustan los agentes permitidos de cada empresa (vacío = sin límite), las personas y suspenden cuentas (nadie de una empresa suspendida puede entrar y su portal deja de existir).
+- **Empresa 1 = la plataforma (BeHIve).** La migración `008_organizations.sql` mueve ahí los datos que ya existían. Sus administradores permanentes (`ADMIN_EMAIL` y los de `permanent.go`) ven *Plataforma → Empresas* y *Solicitudes de demo*: ahí ajustan los agentes permitidos de cada empresa (vacío = sin límite), las personas y suspenden cuentas (nadie de una empresa suspendida puede entrar y su portal deja de existir).
 - **Registro.** `/signup` crea la empresa con su dirección (`/e/ferreteria-lopez`), 1 agente permitido, categorías y plazos de SLA de ejemplo, y su administrador. Los clientes se registran desde el portal de la empresa; el mismo email puede tener cuenta en varias empresas.
 - **Límite de agentes.** Agentes + administradores activos no pueden pasar de `max_agents`. Al llegar al límite, el administrador pide ampliar desde *Tu plan*; la solicitud llega a la plataforma con el precio estimado. Para activarlo, sube el límite en *Plataforma → Empresas*. **Aún no hay cobro automático ni facturación (CFDI)**: el cobro se hace por fuera.
 - **Una sesión por agente.** Al iniciar sesión, un agente o administrador cierra sus sesiones en otros dispositivos (el otro ve el motivo al volver al login). Los clientes pueden tener varias.

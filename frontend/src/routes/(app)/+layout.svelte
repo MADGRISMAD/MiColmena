@@ -257,7 +257,7 @@
 
 {#snippet sidebar()}
 	<div class="flex h-16 shrink-0 items-center px-5">
-		<a href={resolve('/')} aria-label="MiColmena, inicio"><Logo tone="dark" /></a>
+		<a href={resolve('/')} aria-label="BeHIve, inicio"><Logo tone="dark" /></a>
 	</div>
 	{#if $org && !$org.platform}
 		<p

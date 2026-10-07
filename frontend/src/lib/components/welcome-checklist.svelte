@@ -67,7 +67,7 @@
 		>
 			<XIcon class="size-4" aria-hidden="true" />
 		</button>
-		<h2 id="welcome-title" class="text-lg font-semibold">¡Bienvenido a MiColmena, {org.name}!</h2>
+		<h2 id="welcome-title" class="text-lg font-semibold">¡Bienvenido a BeHIve, {org.name}!</h2>
 		<p class="mt-1 text-sm text-muted-foreground">
 			Comparte tu portal y tus clientes ya pueden abrir tickets. Estos pasos te ayudan a dejarlo
 			listo.

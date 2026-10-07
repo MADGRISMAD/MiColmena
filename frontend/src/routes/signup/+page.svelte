@@ -63,7 +63,7 @@
 	const fieldError = (name: string) => errors[name];
 </script>
 
-<svelte:head><title>Crear cuenta gratis · MiColmena</title></svelte:head>
+<svelte:head><title>Crear cuenta gratis · BeHIve</title></svelte:head>
 
 <AuthCard
 	wide

@@ -12,7 +12,7 @@ import (
 )
 
 // permanentAdmins son administradores que nadie puede desactivar, bajar de rol ni cambiarles el
-// email. Es la misma lista en MiColmena, MiTiendita y MiConsultorio; para cambiarla hay que
+// email. Es la misma lista en BeHIve, MiTiendita y MiConsultorio; para cambiarla hay que
 // cambiar el código, así queda en el historial de git.
 var permanentAdmins = []string{"madgrismad@gmail.com", "mayra.bamaca09@gmail.com", "luispantoja1102@gmail.com"}
 

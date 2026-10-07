@@ -90,7 +90,7 @@
 </script>
 
 <svelte:head>
-	<title>{detail ? `${detail.asset.tag} ${detail.asset.name}` : 'Equipo'} · MiColmena</title>
+	<title>{detail ? `${detail.asset.tag} ${detail.asset.name}` : 'Equipo'} · BeHIve</title>
 </svelte:head>
 
 {#if error}

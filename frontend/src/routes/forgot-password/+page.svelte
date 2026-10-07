@@ -31,7 +31,7 @@
 	}
 </script>
 
-<svelte:head><title>Recuperar contraseña · MiColmena</title></svelte:head>
+<svelte:head><title>Recuperar contraseña · BeHIve</title></svelte:head>
 
 <AuthCard
 	title="Recuperar contraseña"

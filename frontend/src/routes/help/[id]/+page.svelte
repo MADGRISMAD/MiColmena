@@ -24,7 +24,7 @@
 	});
 </script>
 
-<svelte:head><title>{article?.title ?? 'Ayuda'} · MiColmena</title></svelte:head>
+<svelte:head><title>{article?.title ?? 'Ayuda'} · BeHIve</title></svelte:head>
 
 {#if missing}
 	<EmptyState title="Este artículo no existe o ya no está publicado">

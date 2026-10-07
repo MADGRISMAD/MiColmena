@@ -1,6 +1,6 @@
-# MiColmena · Frontend
+# BeHIve · Frontend
 
-Aplicación web de MiColmena: SvelteKit + TypeScript + Tailwind CSS + shadcn-svelte.
+Aplicación web de BeHIve: SvelteKit + TypeScript + Tailwind CSS + shadcn-svelte.
 Se compila a archivos estáticos (SPA) que hablan con la API en Go de `../backend`.
 
 ## Requisitos

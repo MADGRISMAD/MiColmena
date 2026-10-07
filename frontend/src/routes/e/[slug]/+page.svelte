@@ -48,7 +48,7 @@
 	}
 </script>
 
-<svelte:head><title>{org ? `Soporte de ${org.name}` : 'Soporte'} · MiColmena</title></svelte:head>
+<svelte:head><title>{org ? `Soporte de ${org.name}` : 'Soporte'} · BeHIve</title></svelte:head>
 
 {#if missing}
 	<main class="grid min-h-screen place-items-center px-4">
@@ -56,7 +56,7 @@
 			title="Este portal no existe"
 			description="Revisa la dirección que te compartieron o escribe a la empresa."
 		>
-			<Button variant="outline" href={resolve('/')}>Ir a MiColmena</Button>
+			<Button variant="outline" href={resolve('/')}>Ir a BeHIve</Button>
 		</EmptyState>
 	</main>
 {:else}

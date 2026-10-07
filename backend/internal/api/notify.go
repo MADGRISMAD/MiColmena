@@ -55,7 +55,7 @@ func (s *Server) notify(ctx context.Context, q querier, out *fanout, n notificat
 	out.users = append(out.users, n.userID)
 
 	body := n.emailBody + "\n\nVer el ticket: " + s.ticketURL(n.ticket.ID) +
-		"\n\n—\nMiColmena. Puedes desactivar estos correos en tu perfil."
+		"\n\n—\nBeHIve. Puedes desactivar estos correos en tu perfil."
 	_, err = q.Exec(ctx, `
 		INSERT INTO email_outbox (to_email, subject, body)
 		SELECT email, $2, $3 FROM users WHERE id = $1 AND active AND email_notifications`,

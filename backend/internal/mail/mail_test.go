@@ -66,7 +66,7 @@ func TestWorkerSendsAndRetries(t *testing.T) {
 }
 
 func TestComposeEncodesSubjectAndBlocksHeaderInjection(t *testing.T) {
-	msg := string(mail.Compose("MiColmena <no-reply@x.test>", mail.Message{
+	msg := string(mail.Compose("BeHIve <no-reply@x.test>", mail.Message{
 		To: "a@x.test", Subject: "Ticket resuelto\r\nBcc: espía@x.test", Body: "Línea 1\nLínea 2",
 	}))
 	if strings.Contains(msg, "\r\nBcc:") {

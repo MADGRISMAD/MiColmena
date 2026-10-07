@@ -1,4 +1,4 @@
-// Precios de MiColmena. Para cambiarlos edita SOLO este archivo: la calculadora de la página
+// Precios de BeHIve. Para cambiarlos edita SOLO este archivo: la calculadora de la página
 // principal, el formulario de demo y el panel de solicitudes leen de aquí.
 //
 // Precio mensual = cuota según el tamaño de la empresa + precio de cada agente (más barato por volumen).

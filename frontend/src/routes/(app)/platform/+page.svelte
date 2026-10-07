@@ -68,7 +68,7 @@
 <PageHeader
 	eyebrow="Plataforma"
 	title="Empresas"
-	description="Todas las empresas que usan MiColmena. Ajusta sus planes o suspende cuentas."
+	description="Todas las empresas que usan BeHIve. Ajusta sus planes o suspende cuentas."
 />
 
 {#if orgs === null}

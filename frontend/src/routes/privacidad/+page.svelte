@@ -6,14 +6,13 @@
 	<h2>1. Quién es responsable de tus datos</h2>
 	<p>
 		<strong>[Nombre o razón social]</strong>, con domicilio en <strong>[domicilio completo]</strong>
-		(«MiColmena»), es responsable del tratamiento de los datos personales que recabamos a través de este
+		(«BeHIve»), es responsable del tratamiento de los datos personales que recabamos a través de este
 		sitio, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares.
 	</p>
 	<p>
-		Cuando una empresa usa MiColmena para atender a sus propios clientes, esa empresa es la
-		responsable de los datos de sus clientes y MiColmena los trata por su cuenta, solo para
-		prestarle el servicio. Si eres cliente de una de esas empresas, consulta también su aviso de
-		privacidad.
+		Cuando una empresa usa BeHIve para atender a sus propios clientes, esa empresa es la responsable
+		de los datos de sus clientes y BeHIve los trata por su cuenta, solo para prestarle el servicio.
+		Si eres cliente de una de esas empresas, consulta también su aviso de privacidad.
 	</p>
 
 	<h2>2. Qué datos tratamos</h2>

@@ -355,7 +355,7 @@
 </script>
 
 <svelte:head>
-	<title>{ticket ? `#${ticket.id} ${ticket.title}` : 'Ticket'} · MiColmena</title>
+	<title>{ticket ? `#${ticket.id} ${ticket.title}` : 'Ticket'} · BeHIve</title>
 </svelte:head>
 
 {#if error}

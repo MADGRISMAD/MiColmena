@@ -1,4 +1,4 @@
-// Package api expone la API HTTP de MiColmena.
+// Package api expone la API HTTP de BeHIve.
 package api
 
 import (

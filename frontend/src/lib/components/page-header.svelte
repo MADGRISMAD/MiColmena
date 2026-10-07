@@ -15,7 +15,7 @@
 	} = $props();
 </script>
 
-<svelte:head><title>{title} · MiColmena</title></svelte:head>
+<svelte:head><title>{title} · BeHIve</title></svelte:head>
 
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 	<div class="min-w-0">

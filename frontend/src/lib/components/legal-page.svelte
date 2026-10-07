@@ -8,12 +8,12 @@
 		$props();
 </script>
 
-<svelte:head><title>{title} · MiColmena</title></svelte:head>
+<svelte:head><title>{title} · BeHIve</title></svelte:head>
 
 <div class="flex min-h-screen flex-col">
 	<header class="border-b">
 		<div class="mx-auto flex h-16 max-w-3xl items-center justify-between px-4">
-			<a href={resolve('/')} aria-label="MiColmena, inicio"><Logo /></a>
+			<a href={resolve('/')} aria-label="BeHIve, inicio"><Logo /></a>
 			<nav class="flex gap-4 text-sm text-muted-foreground" aria-label="Documentos legales">
 				<a href={resolve('/terminos')} class="hover:text-foreground">Términos</a>
 				<a href={resolve('/privacidad')} class="hover:text-foreground">Privacidad</a>
@@ -28,7 +28,7 @@
 			<TriangleAlertIcon class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
 			<p>
 				<strong>Borrador.</strong> Este documento es una plantilla que debe revisar un abogado antes de
-				usarse. Los datos entre [corchetes] los completa el responsable de MiColmena.
+				usarse. Los datos entre [corchetes] los completa el responsable de BeHIve.
 			</p>
 		</div>
 		<h1 class="text-3xl font-bold tracking-tight">{title}</h1>

@@ -38,7 +38,7 @@
 	const searching = $derived(!!page.url.searchParams.get('q'));
 </script>
 
-<svelte:head><title>Centro de ayuda · MiColmena</title></svelte:head>
+<svelte:head><title>Centro de ayuda · BeHIve</title></svelte:head>
 
 <section class="bg-honeycomb mb-10 rounded-2xl border px-5 py-10 text-center sm:px-6 sm:py-12">
 	<h1 class="text-3xl font-bold tracking-tight">¿En qué podemos ayudarte?</h1>

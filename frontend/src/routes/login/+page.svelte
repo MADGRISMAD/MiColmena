@@ -70,7 +70,7 @@
 	}
 </script>
 
-<svelte:head><title>Iniciar sesión · MiColmena</title></svelte:head>
+<svelte:head><title>Iniciar sesión · BeHIve</title></svelte:head>
 
 <AuthCard
 	title={choices.length ? '¿A qué empresa quieres entrar?' : 'Iniciar sesión'}
@@ -166,7 +166,7 @@
 				class="text-primary underline dark:text-honey">Crea tu cuenta</a
 			>
 		{:else}
-			¿Tu empresa aún no usa MiColmena?&nbsp;<a
+			¿Tu empresa aún no usa BeHIve?&nbsp;<a
 				href={resolve('/signup')}
 				class="text-primary underline dark:text-honey">Crea una cuenta gratis</a
 			>

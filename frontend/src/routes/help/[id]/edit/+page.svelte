@@ -14,7 +14,7 @@
 	});
 </script>
 
-<svelte:head><title>Editar artículo · MiColmena</title></svelte:head>
+<svelte:head><title>Editar artículo · BeHIve</title></svelte:head>
 
 {#if missing}
 	<p class="text-muted-foreground">El artículo no existe.</p>

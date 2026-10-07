@@ -31,7 +31,7 @@
 	import { isAuthenticated } from '#lib/stores/auth.js';
 	import { cn } from '#lib/utils.js';
 
-	// Por qué MiColmena: lo que la distingue para una empresa en México.
+	// Por qué BeHIve: lo que la distingue para una empresa en México.
 	const reasons = [
 		{
 			icon: BadgeDollarSignIcon,
@@ -167,7 +167,7 @@
 		},
 		{
 			q: '¿Necesito instalar algo?',
-			a: 'No. MiColmena funciona en el navegador, en la computadora o en el celular, para tu equipo y para tus clientes.'
+			a: 'No. BeHIve funciona en el navegador, en la computadora o en el celular, para tu equipo y para tus clientes.'
 		},
 		{
 			q: '¿Puedo probarlo antes de contratar?',
@@ -270,12 +270,12 @@
 </script>
 
 <svelte:head>
-	<title>MiColmena · Mesa de ayuda en español con precios en pesos</title>
+	<title>BeHIve · Mesa de ayuda en español con precios en pesos</title>
 	<meta
 		name="description"
 		content="Mesa de ayuda para empresas en México: tickets, SLA, centro de ayuda y reportes en español, con precios en pesos. Calcula tu precio y solicita una demo."
 	/>
-	<meta property="og:title" content="MiColmena · Mesa de ayuda en español con precios en pesos" />
+	<meta property="og:title" content="BeHIve · Mesa de ayuda en español con precios en pesos" />
 	<meta
 		property="og:description"
 		content="Tickets, SLA, centro de ayuda y reportes para tu equipo de soporte, en español y en pesos."
@@ -287,13 +287,13 @@
 <div class="landing flex min-h-screen flex-col">
 	<header class="sticky top-0 z-30 border-b bg-background/80 backdrop-blur">
 		<div class="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
-			<a href={resolve('/')} aria-label="MiColmena, inicio"><Logo /></a>
+			<a href={resolve('/')} aria-label="BeHIve, inicio"><Logo /></a>
 			<nav
 				class="hidden items-center gap-6 text-sm text-muted-foreground md:flex"
 				aria-label="Secciones"
 			>
 				<!-- eslint-disable svelte/no-navigation-without-resolve -- anclas dentro de esta página -->
-				<a href="#por-que" class="hover:text-foreground">Por qué MiColmena</a>
+				<a href="#por-que" class="hover:text-foreground">Por qué BeHIve</a>
 				<a href="#funciones" class="hover:text-foreground">Funciones</a>
 				<a href="#precios" class="hover:text-foreground">Precios</a>
 				<a href="#preguntas" class="hover:text-foreground">Preguntas</a>
@@ -455,7 +455,7 @@
 			<a
 				href="#por-que"
 				class="scroll-cue absolute bottom-6 left-1/2 hidden -translate-x-1/2 lg:block"
-				aria-label="Bajar a por qué MiColmena"
+				aria-label="Bajar a por qué BeHIve"
 			>
 				<span class="flex h-9 w-6 justify-center rounded-full border-2 border-foreground/30 pt-1.5">
 					<span class="cue-dot size-1.5 rounded-full bg-foreground/50"></span>
@@ -477,19 +477,18 @@
 				</div>
 			</div>
 
-			<!-- Por qué MiColmena -->
+			<!-- Por qué BeHIve -->
 			<section id="por-que" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-24">
 				<div class="reveal max-w-2xl">
 					<p class="text-sm font-semibold tracking-wide text-amber-700 uppercase dark:text-honey">
-						Por qué MiColmena
+						Por qué BeHIve
 					</p>
 					<h2 class="mt-2 text-3xl font-bold tracking-tight text-balance sm:text-4xl">
 						Soporte de nivel empresarial, sin precio de Silicon Valley
 					</h2>
 					<p class="mt-3 text-muted-foreground">
 						Las grandes plataformas de soporte cobran lo mismo en México que en Estados Unidos, y en
-						dólares. MiColmena te da lo que tu equipo usa todos los días, en tu idioma y en tu
-						moneda.
+						dólares. BeHIve te da lo que tu equipo usa todos los días, en tu idioma y en tu moneda.
 					</p>
 				</div>
 				<div class="mt-12 grid gap-4 md:grid-cols-3">
@@ -651,7 +650,7 @@
 					<div class="relative text-white">
 						<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Pon orden en tu soporte</h2>
 						<p class="mt-3 text-sidebar-foreground">
-							Cuéntanos de tu equipo y te mostramos cómo MiColmena se adapta a tu forma de trabajar.
+							Cuéntanos de tu equipo y te mostramos cómo BeHIve se adapta a tu forma de trabajar.
 							¿Prefieres probar por tu cuenta?
 							<a href={resolve('/signup')} class="font-medium text-honey underline"
 								>Crea tu cuenta gratis</a
@@ -696,7 +695,7 @@
 				<a href={resolve('/privacidad')} class="hover:text-foreground">Privacidad</a>
 			</nav>
 			<p class="sm:col-span-2">
-				© {new Date().getFullYear()} MiColmena · Precios en pesos mexicanos, IVA no incluido.
+				© {new Date().getFullYear()} BeHIve · Precios en pesos mexicanos, IVA no incluido.
 			</p>
 		</div>
 	</footer>

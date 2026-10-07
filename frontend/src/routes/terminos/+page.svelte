@@ -5,7 +5,7 @@
 <LegalPage title="Términos de servicio" updated="[fecha]">
 	<h2>1. Quiénes somos</h2>
 	<p>
-		MiColmena es un servicio de mesa de ayuda ofrecido por <strong>[Nombre o razón social]</strong>,
+		BeHIve es un servicio de mesa de ayuda ofrecido por <strong>[Nombre o razón social]</strong>,
 		con domicilio en <strong>[domicilio]</strong>. Al crear una cuenta aceptas estos términos.
 	</p>
 
@@ -37,17 +37,17 @@
 
 	<h2>4. Tus datos y los de tus clientes</h2>
 	<p>
-		La información que tu empresa guarda en MiColmena (tickets, mensajes, archivos) es de tu
-		empresa. La tratamos solo para prestarte el servicio, según el
+		La información que tu empresa guarda en BeHIve (tickets, mensajes, archivos) es de tu empresa.
+		La tratamos solo para prestarte el servicio, según el
 		<a href="/privacidad" class="underline">aviso de privacidad</a>. Tu empresa es responsable de
 		informar a sus propios clientes cómo usa sus datos.
 	</p>
 
 	<h2>5. Uso aceptable</h2>
 	<p>
-		No puedes usar MiColmena para actividades ilegales, enviar spam, intentar acceder a datos de
-		otras empresas o afectar el funcionamiento del servicio. Podemos suspender cuentas que incumplan
-		estos términos.
+		No puedes usar BeHIve para actividades ilegales, enviar spam, intentar acceder a datos de otras
+		empresas o afectar el funcionamiento del servicio. Podemos suspender cuentas que incumplan estos
+		términos.
 	</p>
 
 	<h2>6. Disponibilidad y responsabilidad</h2>

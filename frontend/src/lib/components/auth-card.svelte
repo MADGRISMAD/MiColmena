@@ -59,7 +59,7 @@
 		</div>
 
 		<p class="relative text-sm text-sidebar-foreground/60">
-			© {new Date().getFullYear()} MiColmena
+			© {new Date().getFullYear()} BeHIve
 		</p>
 	</aside>
 

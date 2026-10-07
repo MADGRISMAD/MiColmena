@@ -52,7 +52,7 @@ func Load() (Config, error) {
 		SMTPHost:      os.Getenv("SMTP_HOST"),
 		SMTPUsername:  os.Getenv("SMTP_USERNAME"),
 		SMTPPassword:  os.Getenv("SMTP_PASSWORD"),
-		SMTPFrom:      env("SMTP_FROM", "MiColmena <no-reply@localhost>"),
+		SMTPFrom:      env("SMTP_FROM", "BeHIve <no-reply@localhost>"),
 	}
 
 	ttl, err := time.ParseDuration(env("TOKEN_TTL", "24h"))

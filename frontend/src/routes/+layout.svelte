@@ -7,7 +7,7 @@
 </script>
 
 <svelte:head>
-	<title>MiColmena</title>
+	<title>BeHIve</title>
 </svelte:head>
 
 <ModeWatcher />

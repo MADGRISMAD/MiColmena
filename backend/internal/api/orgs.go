@@ -105,7 +105,7 @@ func slugify(name string) string {
 }
 
 // reservedSlugs no pueden usarse como portal para no confundirse con páginas de la plataforma.
-var reservedSlugs = map[string]bool{"api": true, "admin": true, "platform": true, "plataforma": true, "help": true, "ayuda": true, "login": true, "signup": true, "soporte": true, "www": true}
+var reservedSlugs = map[string]bool{"api": true, "admin": true, "platform": true, "plataforma": true, "help": true, "ayuda": true, "login": true, "signup": true, "soporte": true, "www": true, "behive": true, "micolmena": true}
 
 // signup crea una empresa con su primer administrador e inicia sesión. Empieza en el plan gratis
 // (1 agente); para más agentes se pide ampliar el plan.

@@ -80,7 +80,7 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, err := tx.Exec(r.Context(), `
 			INSERT INTO email_outbox (to_email, subject, body) VALUES ($1, $2, $3)`,
-			a.email, "Restablece tu contraseña de MiColmena ("+a.org+")",
+			a.email, "Restablece tu contraseña de BeHIve ("+a.org+")",
 			"Hola "+a.name+":\n\nPara elegir una contraseña nueva para tu cuenta de «"+a.org+
 				"», abre este enlace (vale durante 1 hora):\n\n"+link+
 				"\n\nSi no lo pediste tú, ignora este correo: tu contraseña no cambia."); err != nil {

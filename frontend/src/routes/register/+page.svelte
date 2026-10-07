@@ -34,7 +34,7 @@
 	);
 </script>
 
-<svelte:head><title>Crear cuenta · MiColmena</title></svelte:head>
+<svelte:head><title>Crear cuenta · BeHIve</title></svelte:head>
 
 <AuthCard
 	title="Crear cuenta"

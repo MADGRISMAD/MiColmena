@@ -16,6 +16,6 @@
 		<img src="/logo.png" alt="" class="size-7" />
 	</span>
 	<span class={cn('text-lg', tone === 'dark' ? 'text-white' : 'text-foreground')}>
-		Mi<span class={tone === 'dark' ? 'text-honey' : 'text-primary dark:text-honey'}>Colmena</span>
+		Be<span class={tone === 'dark' ? 'text-honey' : 'text-primary dark:text-honey'}>HI</span>ve
 	</span>
 </span>

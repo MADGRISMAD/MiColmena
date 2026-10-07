@@ -28,7 +28,7 @@ test('una empresa nueva se registra sola y llega al tablero con su portal', asyn
 
 	await expect(page).toHaveURL(/\/dashboard/);
 	await expect(
-		page.getByRole('heading', { name: /Bienvenido a MiColmena, Ferretería López/ })
+		page.getByRole('heading', { name: /Bienvenido a BeHIve, Ferretería López/ })
 	).toBeVisible();
 	await expect(page.getByTestId('portal-url').first()).toContainText('/e/ferreteria-lopez');
 	expect(api.signups[0]).toMatchObject({

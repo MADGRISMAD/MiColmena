@@ -1,4 +1,4 @@
-// Comando api arranca el servidor HTTP de MiColmena.
+// Comando api arranca el servidor HTTP de BeHIve.
 package main
 
 import (
