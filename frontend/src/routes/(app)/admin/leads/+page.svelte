@@ -39,7 +39,9 @@
 	// El precio se recalcula con la fórmula actual; no se guarda lo que vio la persona.
 	function quote(lead: Lead): string {
 		const e = estimate(lead.agents, lead.people);
-		return e.custom ? 'Cotización a la medida' : `${money(e.monthly)} al mes (pago mensual)`;
+		if (e.custom) return 'Cotización a la medida';
+		if (e.free) return 'Plan gratis';
+		return `${money(e.monthly)} al mes (pago mensual)`;
 	}
 	const pending = $derived(leads?.filter((l) => !l.handled).length ?? 0);
 </script>

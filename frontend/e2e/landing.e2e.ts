@@ -37,6 +37,25 @@ test('la calculadora cambia el precio con los agentes y el tamaño de la empresa
 	await expect(pricing.getByRole('button', { name: 'Pedir cotización' })).toBeVisible();
 });
 
+test('1 agente y hasta 10 personas es gratis para siempre', async ({ page }) => {
+	await page.goto('/');
+	const pricing = page.locator('#precios');
+	await pricing.getByLabel(/^Personas en tu empresa/).fill('1'); // hasta 10
+	await pricing.getByLabel(/^Agentes/).fill('1');
+	await expect(pricing.getByTestId('total')).toHaveText('Gratis');
+	await expect(pricing.getByText('para siempre')).toBeVisible();
+
+	// El segundo agente se cobra; el primero sigue incluido.
+	await pricing.getByLabel(/^Agentes/).fill('2');
+	await pricing.getByRole('button', { name: 'Mensual' }).click();
+	await expect(pricing.getByTestId('total')).toHaveText('$149');
+	await expect(pricing.getByText('1 agente incluido')).toBeVisible();
+
+	await pricing.getByLabel(/^Agentes/).fill('1');
+	await pricing.getByRole('button', { name: 'Quiero el plan gratis' }).click();
+	await expect(page.locator('#demo').getByTestId('quote')).toContainText('plan gratis');
+});
+
 test('los agentes nunca superan a las personas de la empresa', async ({ page }) => {
 	await page.goto('/');
 	const pricing = page.locator('#precios');

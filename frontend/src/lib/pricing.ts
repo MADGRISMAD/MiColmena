@@ -7,7 +7,7 @@
 
 /** Cuota mensual según cuántas personas tiene la empresa. null = se cotiza. */
 export const COMPANY_SIZES: { upTo: number | null; fee: number | null }[] = [
-	{ upTo: 10, fee: 99 },
+	{ upTo: 10, fee: 0 },
 	{ upTo: 25, fee: 199 },
 	{ upTo: 50, fee: 399 },
 	{ upTo: 100, fee: 699 },
@@ -24,6 +24,12 @@ export const AGENT_TIERS: { upTo: number; price: number }[] = [
 	{ upTo: 50, price: 109 }
 ];
 
+/**
+ * Plan gratis para siempre: en empresas de hasta FREE_PEOPLE personas no hay cuota y el
+ * primer agente va incluido. Así crecer no es un salto: el segundo agente cuesta lo normal.
+ */
+export const FREE_PEOPLE = 10;
+
 /** A partir de aquí la calculadora pide cotización. */
 export const MAX_AGENTS = AGENT_TIERS[AGENT_TIERS.length - 1].upTo;
 
@@ -33,6 +39,8 @@ export const ANNUAL_MONTHS_PAID = 10;
 export interface Estimate {
 	/** true si se sale de la calculadora y hay que cotizar. */
 	custom: boolean;
+	/** 1 agente en una empresa pequeña: no paga nada. */
+	free: boolean;
 	companyFee: number;
 	/** Agentes agrupados por tramo de precio: [{ count: 5, price: 149 }, …]. */
 	agentLines: { count: number; price: number }[];
@@ -56,11 +64,17 @@ export function estimate(agents: number, people: number): Estimate {
 		agentLines.push({ count, price: tier.price });
 		counted += count;
 	}
+	if (people <= FREE_PEOPLE && agentLines.length > 0) {
+		agentLines[0].count -= 1;
+		if (agentLines[0].count === 0) agentLines.shift();
+		agentLines.unshift({ count: 1, price: 0 });
+	}
 	const companyFee = size.fee ?? 0;
 	const monthly = companyFee + agentLines.reduce((sum, l) => sum + l.count * l.price, 0);
 	const annualTotal = monthly * ANNUAL_MONTHS_PAID;
 	return {
 		custom,
+		free: !custom && monthly === 0,
 		companyFee,
 		agentLines,
 		monthly,
@@ -87,5 +101,5 @@ export function money(amount: number): string {
 	return mxn.format(amount);
 }
 
-/** Precio más bajo posible, para "Desde $X al mes". */
-export const STARTING_PRICE = estimate(1, PEOPLE_STOPS[0]).monthly;
+/** Precio más bajo de pago: 2 agentes en una empresa pequeña. */
+export const STARTING_PRICE = estimate(2, FREE_PEOPLE).monthly;

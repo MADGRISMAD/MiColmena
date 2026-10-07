@@ -4,6 +4,7 @@
 	import {
 		ANNUAL_MONTHS_PAID,
 		estimate,
+		FREE_PEOPLE,
 		MAX_AGENTS,
 		money,
 		PEOPLE_STOPS,
@@ -159,47 +160,67 @@
 			</Button>
 		{:else}
 			<p class="text-sm text-sidebar-foreground">Tu precio</p>
-			<p class="mt-2 flex items-end gap-2">
-				<span class="text-5xl font-bold tracking-tight tabular-nums" data-testid="total"
-					>{money(total)}</span
-				>
-				<span class="pb-1.5 text-sm text-sidebar-foreground">MXN al mes</span>
-			</p>
-			<p class="mt-1 text-sm text-sidebar-foreground">
-				{annual
-					? `${money(e.annualTotal)} al año · ahorras ${money(e.monthly * 12 - e.annualTotal)}`
-					: 'Más IVA.'}
-			</p>
+			{#if e.free}
+				<p class="mt-2 flex items-end gap-2">
+					<span class="text-5xl font-bold tracking-tight" data-testid="total">Gratis</span>
+					<span class="pb-1.5 text-sm text-sidebar-foreground">para siempre</span>
+				</p>
+				<p class="mt-1 text-sm text-sidebar-foreground">
+					1 agente y hasta {FREE_PEOPLE} personas, con todas las funciones.
+				</p>
+			{:else}
+				<p class="mt-2 flex items-end gap-2">
+					<span class="text-5xl font-bold tracking-tight tabular-nums" data-testid="total"
+						>{money(total)}</span
+					>
+					<span class="pb-1.5 text-sm text-sidebar-foreground">MXN al mes</span>
+				</p>
+				<p class="mt-1 text-sm text-sidebar-foreground">
+					{annual
+						? `${money(e.annualTotal)} al año · ahorras ${money(e.monthly * 12 - e.annualTotal)}`
+						: 'Más IVA.'}
+				</p>
+			{/if}
 
 			<dl class="mt-7 grid gap-2.5 border-t border-white/10 pt-5 text-sm">
 				<div class="flex justify-between gap-4">
 					<dt class="text-sidebar-foreground">
 						Empresa ({peopleLabel(people).toLowerCase()} personas)
 					</dt>
-					<dd class="tabular-nums">{money(e.companyFee)}</dd>
+					<dd class="tabular-nums">{e.companyFee ? money(e.companyFee) : 'Incluido'}</dd>
 				</div>
 				{#each e.agentLines as line (line.price)}
 					<div class="flex justify-between gap-4">
 						<dt class="text-sidebar-foreground">
-							{line.count}
-							{line.count === 1 ? 'agente' : 'agentes'} × {money(line.price)}
+							{#if line.price === 0}
+								1 agente incluido
+							{:else}
+								{line.count}
+								{line.count === 1 ? 'agente' : 'agentes'} × {money(line.price)}
+							{/if}
 						</dt>
-						<dd class="tabular-nums">{money(line.count * line.price)}</dd>
+						<dd class="tabular-nums">
+							{line.price === 0 ? 'Gratis' : money(line.count * line.price)}
+						</dd>
 					</div>
 				{/each}
-				<div class="flex justify-between gap-4 border-t border-white/10 pt-2.5 font-semibold">
-					<dt>{annual ? 'Al mes sin el descuento anual' : 'Total al mes'}</dt>
-					<dd class="tabular-nums">{money(e.monthly)}</dd>
-				</div>
+				{#if !e.free}
+					<div class="flex justify-between gap-4 border-t border-white/10 pt-2.5 font-semibold">
+						<dt>{annual ? 'Al mes sin el descuento anual' : 'Total al mes'}</dt>
+						<dd class="tabular-nums">{money(e.monthly)}</dd>
+					</div>
+				{/if}
 			</dl>
-			<p class="mt-2 text-xs text-sidebar-foreground/80">Precios en pesos mexicanos, más IVA.</p>
+			{#if !e.free}
+				<p class="mt-2 text-xs text-sidebar-foreground/80">Precios en pesos mexicanos, más IVA.</p>
+			{/if}
 
 			<Button
 				size="lg"
 				class="mt-8 w-full bg-honey text-honey-foreground hover:bg-honey/90"
 				onclick={onrequest}
 			>
-				Solicitar demo con este precio
+				{e.free ? 'Quiero el plan gratis' : 'Solicitar demo con este precio'}
 			</Button>
 		{/if}
 		<ul class="mt-6 grid gap-1.5 text-sm text-sidebar-foreground">

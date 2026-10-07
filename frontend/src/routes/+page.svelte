@@ -27,7 +27,7 @@
 	import StatusBadge from '#lib/components/status-badge.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import PricingCalculator from '#lib/components/pricing-calculator.svelte';
-	import { money, STARTING_PRICE } from '#lib/pricing.js';
+	import { FREE_PEOPLE, money, STARTING_PRICE } from '#lib/pricing.js';
 	import { isAuthenticated } from '#lib/stores/auth.js';
 	import { cn } from '#lib/utils.js';
 
@@ -146,6 +146,10 @@
 
 	const faqs = [
 		{
+			q: '¿Hay un plan gratis?',
+			a: `Sí, para siempre: 1 agente en una empresa de hasta ${FREE_PEOPLE} personas, con todas las funciones. Si creces, el primer agente sigue incluido y solo pagas desde el segundo (${money(STARTING_PRICE)} MXN al mes).`
+		},
+		{
 			q: '¿Cómo se calcula el precio?',
 			a: 'Con dos datos: cuántos agentes atienden tickets y cuántas personas tiene tu empresa. Hay una cuota según el tamaño de la empresa más un precio por cada agente, que baja a partir del sexto. Mueve la calculadora y verás el desglose.'
 		},
@@ -225,6 +229,7 @@
 	];
 
 	const marquee = [
+		'Gratis con 1 agente',
 		'Precios en pesos',
 		'Bandeja compartida',
 		'SLA por prioridad',
@@ -353,7 +358,9 @@
 					</p>
 					<h1 class="mt-5 text-4xl font-bold tracking-tight text-balance sm:text-5xl xl:text-6xl">
 						{#each headline as word, i (i)}
-							<span class="word mr-[0.25em]" style="--i: {i}">{word}</span><wbr />
+							<span class={cn('word', i < headline.length - 1 && 'mr-[0.25em]')} style="--i: {i}"
+								>{word}</span
+							><wbr />
 						{/each}
 						<span
 							class="word relative whitespace-nowrap text-primary dark:text-honey"
@@ -386,7 +393,7 @@
 						class="enter mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground"
 						style="--delay: 1000ms"
 					>
-						{#each [`Desde ${money(STARTING_PRICE)} MXN al mes`, 'Sin pagar en dólares', 'Todo en español'] as point (point)}
+						{#each [`Gratis con 1 agente y hasta ${FREE_PEOPLE} personas`, 'Sin pagar en dólares', 'Todo en español'] as point (point)}
 							<li class="flex items-center gap-1.5">
 								<CheckIcon class="size-4 text-amber-600" aria-hidden="true" />{point}
 							</li>
@@ -585,7 +592,7 @@
 					<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Calcula tu precio, en pesos</h2>
 					<p class="mt-3 text-muted-foreground">
 						Depende de dos cosas: cuántos agentes atienden tickets y qué tan grande es tu empresa.
-						Todas las funciones vienen incluidas.
+						Todas las funciones vienen incluidas, y con 1 agente y hasta {FREE_PEOPLE} personas es gratis.
 					</p>
 				</div>
 				<div class="reveal mt-12" style="--i: 1">

@@ -135,7 +135,7 @@ Los clientes solo ven sus propios tickets.
 
 ## Página principal y ventas
 
-- **Precio = cuota según cuántas personas tiene la empresa + precio por cada agente** (más barato a partir del sexto), en pesos y más IVA, con 2 meses gratis en pago anual. Todas las funciones van incluidas. La landing tiene una calculadora con dos sliders (agentes y personas). Los montos se cambian en `frontend/src/lib/pricing.ts`; la calculadora, el formulario de demo y el panel de solicitudes los leen de ahí.
+- **Precio = cuota según cuántas personas tiene la empresa + precio por cada agente** (más barato a partir del sexto), en pesos y más IVA, con 2 meses gratis en pago anual. Todas las funciones van incluidas. **1 agente y hasta 10 personas es gratis para siempre**; en empresas de ese tamaño el primer agente sigue incluido aunque agreguen más. La landing tiene una calculadora con dos sliders (agentes y personas). Los montos se cambian en `frontend/src/lib/pricing.ts`; la calculadora, el formulario de demo y el panel de solicitudes los leen de ahí.
 - El formulario **Solicitar demo** guarda la solicitud con los agentes y personas elegidos en la calculadora (`POST /api/leads`, con límite por IP y un campo trampa contra bots) y avisa a los administradores en la campana y por correo. Se gestionan en *Administración → Solicitudes de demo*.
 
 ## Correo y adjuntos

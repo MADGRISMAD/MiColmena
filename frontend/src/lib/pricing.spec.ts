@@ -28,8 +28,26 @@ describe('estimate', () => {
 		expect(estimate(10, 1001).custom).toBe(true);
 	});
 
-	it('el precio de entrada es una empresa pequeña con un agente', () => {
-		expect(STARTING_PRICE).toBe(99 + 149);
+	it('1 agente y hasta 10 personas es gratis', () => {
+		for (const people of [5, 10]) {
+			const e = estimate(1, people);
+			expect(e.free).toBe(true);
+			expect(e.monthly).toBe(0);
+			expect(e.annualTotal).toBe(0);
+		}
+		expect(estimate(1, 11).free).toBe(false);
+	});
+
+	it('crecer desde el plan gratis no es un salto: el primer agente sigue incluido', () => {
+		const e = estimate(2, 10);
+		expect(e.agentLines).toEqual([
+			{ count: 1, price: 0 },
+			{ count: 1, price: 149 }
+		]);
+		expect(e.monthly).toBe(149);
+		expect(e.free).toBe(false);
+		expect(STARTING_PRICE).toBe(149);
+		expect(estimate(6, 10).monthly).toBe(4 * 149 + 129);
 		expect(money(1299)).toBe('$1,299');
 	});
 });

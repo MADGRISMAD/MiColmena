@@ -84,7 +84,9 @@
 				<strong>
 					{quote.custom
 						? 'cotización a la medida'
-						: `${money(annual ? quote.monthlyAnnual : quote.monthly)} al mes`}
+						: quote.free
+							? 'plan gratis'
+							: `${money(annual ? quote.monthlyAnnual : quote.monthly)} al mes`}
 				</strong>
 			</p>
 			<button
