@@ -129,8 +129,14 @@ Todas las rutas, salvo `health`, `register` y `login`, requieren `Authorization:
 | GET · PUT | `/api/sla` | agentes · admin | Plazos por prioridad |
 | GET | `/api/reports`, `/api/reports/tickets.csv` | agentes | Reporte por rango (`from`, `to`, `tz`) y exportación |
 | GET · POST, PATCH, DELETE | `/api/articles` | todos · agentes | Centro de ayuda (sin sesión, solo los publicados) |
+| POST · GET, PATCH | `/api/leads` | todos · admin | Solicitudes de demo desde la landing |
 
 Los clientes solo ven sus propios tickets.
+
+## Página principal y ventas
+
+- Los **planes y precios** (en pesos, por agente al mes, más IVA) están en `frontend/src/lib/pricing.ts`. Cambia ahí precios, límites o lo que incluye cada plan; la landing, el formulario de demo y el panel de solicitudes los leen de ese archivo.
+- El formulario **Solicitar demo** guarda la solicitud (`POST /api/leads`, con límite por IP y un campo trampa contra bots) y avisa a los administradores en la campana y por correo. Se gestionan en *Administración → Solicitudes de demo*.
 
 ## Correo y adjuntos
 

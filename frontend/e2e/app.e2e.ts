@@ -8,10 +8,10 @@ test.beforeEach(async ({ page }) => {
 	await api.install(page);
 });
 
-test('la portada invita a registrarse o iniciar sesión', async ({ page }) => {
+test('la portada lleva a iniciar sesión', async ({ page }) => {
 	await page.goto('/');
 	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-	await page.getByRole('link', { name: 'Iniciar sesión' }).click();
+	await page.getByRole('banner').getByRole('link', { name: 'Iniciar sesión' }).click();
 	await expect(page).toHaveURL('/login');
 });
 

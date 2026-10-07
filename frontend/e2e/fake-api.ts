@@ -35,6 +35,7 @@ export class FakeApi {
 	views: SavedView[] = [];
 	articles: Article[] = [];
 	categories = [{ id: 1, name: 'Facturación', created_at: now() }];
+	leads: Record<string, string>[] = [];
 	requests: { method: string; path: string; body: unknown }[] = [];
 	private nextId = 1;
 	private seq = 100;
@@ -128,6 +129,10 @@ export class FakeApi {
 			});
 		}
 		if (method === 'POST' && path === '/auth/forgot') return route.fulfill({ status: 202 });
+		if (method === 'POST' && path === '/leads') {
+			this.leads.push(body);
+			return route.fulfill({ status: 201 });
+		}
 
 		// La ayuda publicada es pública.
 		if (path === '/articles' && method === 'GET') {

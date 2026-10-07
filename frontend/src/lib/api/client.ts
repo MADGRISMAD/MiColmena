@@ -9,6 +9,8 @@ import type {
 	CreateTicketInput,
 	CreateUserInput,
 	List,
+	Lead,
+	LeadInput,
 	Macro,
 	MacroInput,
 	NotificationList,
@@ -190,6 +192,11 @@ export function createApiClient(options: ApiClientOptions = {}) {
 		updateArticle: (id: number, input: ArticleInput) =>
 			request<Article>('PATCH', `/articles/${id}`, input),
 		deleteArticle: (id: number) => request<null>('DELETE', `/articles/${id}`),
+
+		createLead: (input: LeadInput) => request<null>('POST', '/leads', input),
+		listLeads: () => request<List<Lead>>('GET', '/leads'),
+		setLeadHandled: (id: number, handled: boolean) =>
+			request<Lead>('PATCH', `/leads/${id}`, { handled }),
 
 		listViews: () => request<List<SavedView>>('GET', '/views'),
 		createView: (name: string, query: string) =>

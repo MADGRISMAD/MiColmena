@@ -7,6 +7,7 @@
 	import CheckCheckIcon from '@lucide/svelte/icons/check-check';
 	import CircleDotIcon from '@lucide/svelte/icons/circle-dot';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
+	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import TicketPlusIcon from '@lucide/svelte/icons/ticket-plus';
 	import UserRoundCheckIcon from '@lucide/svelte/icons/user-round-check';
 	import { api, type Notification, type NotificationKind } from '#lib/api/index.js';
@@ -42,7 +43,8 @@
 		assigned: UserRoundCheckIcon,
 		comment: MessageSquareIcon,
 		mention: AtSignIcon,
-		status: CircleDotIcon
+		status: CircleDotIcon,
+		lead: SparklesIcon
 	};
 
 	async function openNotification(n: Notification) {
@@ -53,6 +55,7 @@
 			api.readNotifications({ ids: [n.id] }).catch(() => {});
 		}
 		if (n.ticket_id) await goto(resolve('/(app)/tickets/[id]', { id: String(n.ticket_id) }));
+		else if (n.kind === 'lead') await goto(resolve('/(app)/admin/leads'));
 	}
 
 	async function readAll() {

@@ -1,65 +1,168 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
+	import AtSignIcon from '@lucide/svelte/icons/at-sign';
+	import BadgeDollarSignIcon from '@lucide/svelte/icons/badge-dollar-sign';
+	import BellRingIcon from '@lucide/svelte/icons/bell-ring';
+	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import ChartColumnIcon from '@lucide/svelte/icons/chart-column';
-	import ChevronsUpIcon from '@lucide/svelte/icons/chevrons-up';
+	import CheckIcon from '@lucide/svelte/icons/check';
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import InboxIcon from '@lucide/svelte/icons/inbox';
+	import LanguagesIcon from '@lucide/svelte/icons/languages';
 	import LockIcon from '@lucide/svelte/icons/lock';
-	import SearchIcon from '@lucide/svelte/icons/search';
+	import MessageSquareQuoteIcon from '@lucide/svelte/icons/message-square-quote';
+	import RocketIcon from '@lucide/svelte/icons/rocket';
 	import ShieldCheckIcon from '@lucide/svelte/icons/shield-check';
-	import type { TicketPriority, TicketStatus } from '#lib/api/types.js';
+	import SmileIcon from '@lucide/svelte/icons/smile';
+	import SmartphoneIcon from '@lucide/svelte/icons/smartphone';
+	import TimerIcon from '@lucide/svelte/icons/timer';
+	import UsersIcon from '@lucide/svelte/icons/users';
+	import ZapIcon from '@lucide/svelte/icons/zap';
+	import type { LeadPlan, TicketPriority, TicketStatus } from '#lib/api/types.js';
+	import DemoForm from '#lib/components/demo-form.svelte';
 	import HexAvatar from '#lib/components/hex-avatar.svelte';
 	import Logo from '#lib/components/logo.svelte';
 	import PriorityBadge from '#lib/components/priority-badge.svelte';
 	import StatusBadge from '#lib/components/status-badge.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { ANNUAL_MONTHS_PAID, planPrice, plans } from '#lib/pricing.js';
 	import { isAuthenticated } from '#lib/stores/auth.js';
+	import { cn } from '#lib/utils.js';
 
-	const features = [
+	// Por qué MiColmena: lo que la distingue para una empresa en México.
+	const reasons = [
 		{
-			icon: InboxIcon,
-			title: 'Bandeja compartida',
-			text: 'Todas las solicitudes en un solo lugar, con vistas para lo tuyo, lo que nadie ha tomado y lo que espera al cliente.'
+			icon: BadgeDollarSignIcon,
+			title: 'Precio en pesos',
+			text: 'Pagas en MXN por agente. Sin cobros en dólares ni sorpresas por el tipo de cambio.'
 		},
 		{
-			icon: LockIcon,
-			title: 'Notas internas',
-			text: 'El equipo se coordina dentro del ticket. Las notas se ven en ámbar y el cliente nunca las recibe.'
+			icon: LanguagesIcon,
+			title: 'En español de verdad',
+			text: 'Interfaz, correos y centro de ayuda en español. La búsqueda entiende «impresoras» cuando buscas «impresora».'
 		},
 		{
-			icon: ChevronsUpIcon,
-			title: 'Prioridades a la vista',
-			text: 'Estados con color e iconos de prioridad: lo urgente salta a la vista aunque la lista sea larga.'
+			icon: RocketIcon,
+			title: 'Listo en una tarde',
+			text: 'Das de alta a tu equipo, eliges categorías y plazos, y empiezas. Sin meses de implementación ni consultores.'
+		}
+	];
+
+	// Funciones agrupadas por quién las usa. Todas existen hoy en el producto.
+	const featureGroups = [
+		{
+			title: 'Para tus agentes',
+			items: [
+				{
+					icon: InboxIcon,
+					title: 'Bandeja con vistas',
+					text: 'Lo tuyo, lo sin asignar, lo que espera al cliente y tus propias vistas guardadas.'
+				},
+				{
+					icon: MessageSquareQuoteIcon,
+					title: 'Respuestas guardadas',
+					text: 'Plantillas con el nombre del cliente que además cambian el estado al enviar.'
+				},
+				{
+					icon: AtSignIcon,
+					title: 'Notas internas y menciones',
+					text: 'Coordínate dentro del ticket con @compañero sin que el cliente lo vea.'
+				},
+				{
+					icon: ZapIcon,
+					title: 'Acciones masivas',
+					text: 'Asigna, prioriza, etiqueta o cierra decenas de tickets de un clic.'
+				}
+			]
 		},
 		{
-			icon: SearchIcon,
-			title: 'Búsqueda en español',
-			text: 'Encuentra «impresora» aunque escribas «impresoras». Pulsa / desde cualquier pantalla para buscar.'
+			title: 'Para tus clientes',
+			items: [
+				{
+					icon: SmartphoneIcon,
+					title: 'Portal de soporte',
+					text: 'Abren tickets, adjuntan capturas y siguen la conversación desde la computadora o el celular.'
+				},
+				{
+					icon: BookOpenIcon,
+					title: 'Centro de ayuda',
+					text: 'Artículos públicos que se sugieren mientras escriben, antes de abrir un ticket.'
+				},
+				{
+					icon: BellRingIcon,
+					title: 'Avisos al momento',
+					text: 'Correo y notificaciones en tiempo real cuando les responden o se resuelve su caso.'
+				},
+				{
+					icon: SmileIcon,
+					title: 'Encuesta de satisfacción',
+					text: 'Al resolver, califican la atención con un clic.'
+				}
+			]
 		},
 		{
-			icon: ChartColumnIcon,
-			title: 'Dashboard útil',
-			text: 'Pendientes, sin asignar, urgentes y tiempo de resolución, con tu lista de trabajo al lado.'
-		},
-		{
-			icon: ShieldCheckIcon,
-			title: 'Seguro desde el inicio',
-			text: 'Roles para clientes, agentes y administradores, y bloqueo automático ante intentos de acceso repetidos.'
+			title: 'Para quien dirige',
+			items: [
+				{
+					icon: TimerIcon,
+					title: 'SLA por prioridad',
+					text: 'Plazos de primera respuesta y resolución, con aviso antes de que venzan.'
+				},
+				{
+					icon: ChartColumnIcon,
+					title: 'Reportes y CSV',
+					text: 'Volumen, tiempos, cumplimiento y satisfacción por agente y categoría.'
+				},
+				{
+					icon: UsersIcon,
+					title: 'Roles y equipo',
+					text: 'Administradores, agentes y clientes; da de alta o desactiva cuentas en segundos.'
+				},
+				{
+					icon: ShieldCheckIcon,
+					title: 'Seguro desde el inicio',
+					text: 'Contraseñas cifradas, bloqueo ante intentos repetidos y sesiones que se cierran al cambiar la contraseña.'
+				}
+			]
 		}
 	];
 
 	const steps = [
 		{
-			title: 'El cliente abre un ticket',
-			text: 'Describe su problema desde la web y sigue cada respuesta.'
+			title: 'Pide tu demo',
+			text: 'Te mostramos MiColmena con casos como los tuyos y resolvemos tus dudas.'
 		},
 		{
-			title: 'El equipo lo toma',
-			text: 'Se asigna, se prioriza y se responde; las notas internas quedan entre agentes.'
+			title: 'Configura tu equipo',
+			text: 'Das de alta a tus agentes, tus categorías y los plazos de atención.'
 		},
 		{
-			title: 'Se resuelve y queda el historial',
-			text: 'Todo el contexto en el ticket, listo para la próxima vez.'
+			title: 'Recibe tickets',
+			text: 'Tus clientes escriben desde tu portal y tu equipo los resuelve en orden.'
+		}
+	];
+
+	const faqs = [
+		{
+			q: '¿Los precios son en pesos?',
+			a: 'Sí. Todos los precios están en pesos mexicanos (MXN) por agente al mes, más IVA. No dependen del tipo de cambio.'
+		},
+		{
+			q: '¿Cobran por los clientes que abren tickets?',
+			a: 'No. Solo pagas por los agentes, las personas de tu equipo que atienden tickets. Tus clientes y el centro de ayuda no cuentan.'
+		},
+		{
+			q: '¿Necesito instalar algo?',
+			a: 'No. MiColmena funciona en el navegador, en la computadora o en el celular, para tu equipo y para tus clientes.'
+		},
+		{
+			q: '¿Puedo verlo antes de contratar?',
+			a: 'Sí. Llena el formulario de demo y te enseñamos MiColmena con casos parecidos a los de tu empresa.'
+		},
+		{
+			q: '¿Mis clientes necesitan crear una cuenta?',
+			a: 'Para abrir y seguir sus tickets, sí: se registran con su email en un minuto. El centro de ayuda se puede leer sin cuenta.'
 		}
 	];
 
@@ -73,35 +176,35 @@
 	}[] = [
 		{
 			id: 128,
-			title: 'Error 500 al exportar a PDF',
+			title: 'No llega la factura del pedido 4521',
 			status: 'open',
 			priority: 'urgent',
 			who: 'Marta Soto'
 		},
 		{
 			id: 127,
-			title: 'La impresora no imprime en color',
+			title: 'La terminal no imprime el ticket de venta',
 			status: 'in_progress',
 			priority: 'high',
 			who: 'Luis Ramírez'
 		},
 		{
 			id: 126,
-			title: 'Factura duplicada de septiembre',
+			title: 'Cambio de datos fiscales',
 			status: 'waiting',
 			priority: 'medium',
 			who: 'Marta Soto'
 		},
 		{
 			id: 125,
-			title: 'Alta de usuario para ventas',
+			title: 'Alta de usuario para la sucursal Monterrey',
 			status: 'resolved',
 			priority: 'low',
 			who: 'Luis Ramírez'
 		}
 	];
 
-	const headline = 'El soporte de tu equipo, organizado como una'.split(' ');
+	const headline = 'Mesa de ayuda profesional, con precio'.split(' ');
 
 	// Hexágonos del parallax: x/y en %, s = tamaño en px, d = profundidad (más alto = más cerca y más rápido).
 	const hexes = [
@@ -117,15 +220,25 @@
 	];
 
 	const marquee = [
+		'Precios en pesos',
 		'Bandeja compartida',
-		'Notas internas',
 		'SLA por prioridad',
-		'Menciones',
-		'Base de conocimiento',
+		'Respuestas guardadas',
+		'Centro de ayuda',
 		'Reportes en CSV',
 		'Tiempo real',
 		'Encuestas de satisfacción'
 	];
+
+	let annual = $state(true);
+	let demoPlan = $state<LeadPlan | ''>('');
+	let openFaq = $state<number | null>(0);
+
+	function choosePlan(id: LeadPlan) {
+		demoPlan = id;
+		document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' });
+		setTimeout(() => document.getElementById('lead-name')?.focus({ preventScroll: true }), 500);
+	}
 
 	// Las capas del hero siguen al mouse; con touch no hace falta.
 	function tilt(e: PointerEvent & { currentTarget: HTMLElement }) {
@@ -142,11 +255,18 @@
 </script>
 
 <svelte:head>
-	<title>MiColmena · Mesa de ayuda para tu equipo de soporte</title>
+	<title>MiColmena · Mesa de ayuda en español con precios en pesos</title>
 	<meta
 		name="description"
-		content="MiColmena organiza los tickets de soporte de tu equipo: bandeja compartida, notas internas, prioridades y dashboard."
+		content="Mesa de ayuda para empresas en México: tickets, SLA, centro de ayuda y reportes en español, con precios en pesos por agente. Solicita una demo."
 	/>
+	<meta property="og:title" content="MiColmena · Mesa de ayuda en español con precios en pesos" />
+	<meta
+		property="og:description"
+		content="Tickets, SLA, centro de ayuda y reportes para tu equipo de soporte, en español y en pesos."
+	/>
+	<meta property="og:type" content="website" />
+	<meta property="og:locale" content="es_MX" />
 </svelte:head>
 
 <div class="landing flex min-h-screen flex-col">
@@ -158,16 +278,20 @@
 				aria-label="Secciones"
 			>
 				<!-- eslint-disable svelte/no-navigation-without-resolve -- anclas dentro de esta página -->
+				<a href="#por-que" class="hover:text-foreground">Por qué MiColmena</a>
 				<a href="#funciones" class="hover:text-foreground">Funciones</a>
-				<a href="#como-funciona" class="hover:text-foreground">Cómo funciona</a>
+				<a href="#precios" class="hover:text-foreground">Precios</a>
+				<a href="#preguntas" class="hover:text-foreground">Preguntas</a>
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				<a href={resolve('/help')} class="hover:text-foreground">Ayuda</a>
 			</nav>
 			<div class="flex items-center gap-2">
 				{#if $isAuthenticated}
 					<Button href={resolve('/(app)/tickets')}>Ir a mis tickets</Button>
 				{:else}
 					<Button variant="ghost" href={resolve('/login')}>Iniciar sesión</Button>
-					<Button href={resolve('/register')} class="hidden sm:inline-flex">Crear cuenta</Button>
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- ancla dentro de esta página -->
+					<Button href="#demo" class="hidden sm:inline-flex">Solicitar demo</Button>
 				{/if}
 			</div>
 		</div>
@@ -208,24 +332,24 @@
 			{/each}
 
 			<div
-				class="hero-inner relative mx-auto grid w-full max-w-6xl items-center gap-12 px-4 py-16 sm:py-24 lg:grid-cols-[1fr_1.1fr] lg:py-0"
+				class="hero-inner relative mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,1fr)] items-center gap-12 px-4 py-16 sm:py-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:py-0"
 			>
 				<div class="layer" style="--d: 0.2">
 					<p
 						class="enter inline-flex items-center gap-2 rounded-full border bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-xs backdrop-blur"
 					>
 						<span class="hex pulse size-2.5 bg-honey" aria-hidden="true"></span>
-						Mesa de ayuda para equipos de soporte
+						Hecha para empresas en México
 					</p>
-					<h1 class="mt-5 text-4xl font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl">
+					<h1 class="mt-5 text-4xl font-bold tracking-tight text-balance sm:text-5xl xl:text-6xl">
 						{#each headline as word, i (i)}
-							<span class="word mr-[0.25em]" style="--i: {i}">{word}</span>
+							<span class="word mr-[0.25em]" style="--i: {i}">{word}</span><wbr />
 						{/each}
 						<span
 							class="word relative whitespace-nowrap text-primary dark:text-honey"
 							style="--i: {headline.length}"
 						>
-							colmena
+							en pesos
 							<span
 								class="underline-draw absolute inset-x-0 -bottom-1 h-2 rounded-full bg-honey/60"
 								aria-hidden="true"
@@ -236,16 +360,28 @@
 						class="enter mt-6 max-w-xl text-lg text-pretty text-muted-foreground"
 						style="--delay: 700ms"
 					>
-						Recibe las solicitudes de tus clientes, repártelas en el equipo y resuélvelas con todo
-						el historial en un mismo lugar. Sencillo de usar desde el primer día.
+						Tickets, SLA, centro de ayuda y reportes en una sola herramienta en español. Lo que
+						esperas de una plataforma de soporte empresarial, con un precio pensado para México.
 					</p>
 					<div class="enter mt-8 flex flex-wrap gap-3" style="--delay: 850ms">
-						<Button size="lg" href={resolve('/register')}>
-							Crear una cuenta
+						<!-- eslint-disable svelte/no-navigation-without-resolve -- anclas dentro de esta página -->
+						<Button size="lg" href="#demo">
+							Solicitar una demo
 							<ArrowRightIcon aria-hidden="true" />
 						</Button>
-						<Button size="lg" variant="outline" href={resolve('/login')}>Ya tengo cuenta</Button>
+						<Button size="lg" variant="outline" href="#precios">Ver precios</Button>
+						<!-- eslint-enable svelte/no-navigation-without-resolve -->
 					</div>
+					<ul
+						class="enter mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground"
+						style="--delay: 1000ms"
+					>
+						{#each [`Desde ${planPrice(plans[0], false)} MXN por agente`, 'Sin pagar en dólares', 'Todo en español'] as point (point)}
+							<li class="flex items-center gap-1.5">
+								<CheckIcon class="size-4 text-amber-600" aria-hidden="true" />{point}
+							</li>
+						{/each}
+					</ul>
 				</div>
 
 				<!-- Vista previa del producto, hecha con los mismos componentes de la app -->
@@ -292,7 +428,7 @@
 							>
 								<LockIcon class="size-3" /> Nota interna
 							</p>
-							<p class="mt-1">Pedir el cartucho cian al proveedor antes del viernes.</p>
+							<p class="mt-1">@Marta revisa si el CFDI se timbró antes de reenviarlo.</p>
 						</div>
 					</div>
 				</div>
@@ -300,9 +436,9 @@
 
 			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- ancla dentro de esta página -->
 			<a
-				href="#funciones"
+				href="#por-que"
 				class="scroll-cue absolute bottom-6 left-1/2 hidden -translate-x-1/2 lg:block"
-				aria-label="Bajar a funciones"
+				aria-label="Bajar a por qué MiColmena"
 			>
 				<span class="flex h-9 w-6 justify-center rounded-full border-2 border-foreground/30 pt-1.5">
 					<span class="cue-dot size-1.5 rounded-full bg-foreground/50"></span>
@@ -324,39 +460,83 @@
 				</div>
 			</div>
 
-			<!-- Funciones -->
-			<section id="funciones" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-24">
+			<!-- Por qué MiColmena -->
+			<section id="por-que" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-24">
 				<div class="reveal max-w-2xl">
-					<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">
-						Todo lo que tu equipo necesita, nada que estorbe
+					<p class="text-sm font-semibold tracking-wide text-amber-700 uppercase dark:text-honey">
+						Por qué MiColmena
+					</p>
+					<h2 class="mt-2 text-3xl font-bold tracking-tight text-balance sm:text-4xl">
+						Soporte de nivel empresarial, sin precio de Silicon Valley
 					</h2>
 					<p class="mt-3 text-muted-foreground">
-						Las herramientas de soporte grandes hacen de todo; MiColmena se enfoca en que atender a
-						tus clientes sea rápido y ordenado.
+						Las grandes plataformas de soporte cobran lo mismo en México que en Estados Unidos, y en
+						dólares. MiColmena te da lo que tu equipo usa todos los días, en tu idioma y en tu
+						moneda.
 					</p>
 				</div>
-				<div class="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{#each features as feature, i (feature.title)}
+				<div class="mt-12 grid gap-4 md:grid-cols-3">
+					{#each reasons as reason, i (reason.title)}
 						<div
-							class="reveal group rounded-xl border bg-card p-6 shadow-xs transition-[box-shadow,translate] duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-amber-900/10"
-							style="--i: {i % 3}"
+							class="reveal group rounded-2xl border bg-card p-7 shadow-xs transition-[box-shadow,translate] duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-amber-900/10"
+							style="--i: {i}"
 						>
 							<span
-								class="hex grid size-11 place-items-center bg-honey text-honey-foreground transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[30deg]"
+								class="hex grid size-12 place-items-center bg-honey text-honey-foreground transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[30deg]"
 							>
-								<feature.icon
-									class="size-5 transition-transform duration-500 group-hover:-rotate-[30deg]"
+								<reason.icon
+									class="size-6 transition-transform duration-500 group-hover:-rotate-[30deg]"
 									aria-hidden="true"
 								/>
 							</span>
-							<h3 class="mt-4 font-semibold">{feature.title}</h3>
-							<p class="mt-2 text-sm text-muted-foreground">{feature.text}</p>
+							<h3 class="mt-5 text-lg font-semibold">{reason.title}</h3>
+							<p class="mt-2 text-muted-foreground">{reason.text}</p>
 						</div>
 					{/each}
 				</div>
 			</section>
 
-			<!-- Cómo funciona -->
+			<!-- Funciones -->
+			<section id="funciones" class="scroll-mt-20 border-y bg-card/60 py-24">
+				<div class="mx-auto max-w-6xl px-4">
+					<div class="reveal max-w-2xl">
+						<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">
+							Todo tu soporte en una sola colmena
+						</h2>
+						<p class="mt-3 text-muted-foreground">
+							Cada función está pensada para que tu equipo responda más rápido y tus clientes sepan
+							siempre en qué va su caso.
+						</p>
+					</div>
+					<div class="mt-12 grid gap-10 lg:grid-cols-3">
+						{#each featureGroups as group, g (group.title)}
+							<div class="reveal" style="--i: {g}">
+								<h3 class="flex items-center gap-2 font-semibold">
+									<span class="hex size-3 bg-honey" aria-hidden="true"></span>
+									{group.title}
+								</h3>
+								<ul class="mt-5 grid gap-5">
+									{#each group.items as item (item.title)}
+										<li class="flex gap-3">
+											<span
+												class="grid size-9 shrink-0 place-items-center rounded-lg bg-honey/15 text-amber-700 dark:text-honey"
+											>
+												<item.icon class="size-4" aria-hidden="true" />
+											</span>
+											<span>
+												<span class="block font-medium">{item.title}</span>
+												<span class="mt-0.5 block text-sm text-muted-foreground">{item.text}</span>
+											</span>
+										</li>
+									{/each}
+								</ul>
+							</div>
+						{/each}
+					</div>
+				</div>
+			</section>
+
+			<!-- Cómo empezar -->
 			<section
 				id="como-funciona"
 				class="bg-honeycomb-dark relative scroll-mt-20 overflow-hidden bg-sidebar text-white"
@@ -366,7 +546,9 @@
 					aria-hidden="true"
 				></div>
 				<div class="relative mx-auto max-w-6xl px-4 py-24">
-					<h2 class="reveal text-3xl font-bold tracking-tight sm:text-4xl">Cómo funciona</h2>
+					<h2 class="reveal text-3xl font-bold tracking-tight sm:text-4xl">
+						Empieza en tres pasos
+					</h2>
 					<ol class="relative mt-14 grid gap-10 md:grid-cols-3">
 						<div
 							class="steps-line absolute top-6 right-[16%] left-6 hidden h-0.5 bg-honey md:block"
@@ -387,29 +569,165 @@
 				</div>
 			</section>
 
-			<!-- Llamada final -->
-			<section class="mx-auto max-w-6xl px-4 py-24">
+			<!-- Precios -->
+			<section id="precios" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-24">
+				<div class="reveal mx-auto max-w-2xl text-center">
+					<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Precios claros, en pesos</h2>
+					<p class="mt-3 text-muted-foreground">
+						Pagas por cada agente de tu equipo. Tus clientes no cuentan.
+					</p>
+					<div
+						class="mt-8 inline-flex rounded-full border bg-muted p-1 text-sm"
+						role="group"
+						aria-label="Forma de pago"
+					>
+						{#each [{ value: false, label: 'Mensual' }, { value: true, label: 'Anual' }] as option (option.label)}
+							<button
+								type="button"
+								aria-pressed={annual === option.value}
+								onclick={() => (annual = option.value)}
+								class={cn(
+									'rounded-full px-4 py-1.5 font-medium text-muted-foreground transition-colors',
+									annual === option.value && 'bg-card text-foreground shadow-sm'
+								)}
+							>
+								{option.label}
+								{#if option.value}
+									<span
+										class="ml-1 rounded-full bg-honey/30 px-1.5 text-xs text-amber-900 dark:text-amber-200"
+									>
+										{12 - ANNUAL_MONTHS_PAID} meses gratis
+									</span>
+								{/if}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<div class="mt-12 grid items-start gap-6 lg:grid-cols-3">
+					{#each plans as plan, i (plan.id)}
+						{@const price = planPrice(plan, annual)}
+						<div
+							class={cn(
+								'reveal relative flex h-full flex-col rounded-2xl border bg-card p-7 shadow-xs',
+								plan.highlighted && 'border-2 border-honey shadow-xl shadow-amber-900/10 lg:-mt-4'
+							)}
+							style="--i: {i}"
+						>
+							{#if plan.highlighted}
+								<span
+									class="absolute -top-3 left-7 rounded-full bg-honey px-3 py-0.5 text-xs font-semibold text-honey-foreground"
+								>
+									Recomendado
+								</span>
+							{/if}
+							<h3 class="text-lg font-semibold">{plan.name}</h3>
+							<p class="mt-1 min-h-10 text-sm text-muted-foreground">{plan.description}</p>
+							<div class="mt-5 flex items-end gap-1">
+								{#if price}
+									<span class="text-4xl font-bold tracking-tight tabular-nums">{price}</span>
+									<span class="pb-1 text-sm text-muted-foreground">MXN / agente / mes</span>
+								{:else}
+									<span class="text-4xl font-bold tracking-tight">A la medida</span>
+								{/if}
+							</div>
+							<p class="mt-1 text-xs text-muted-foreground">
+								{plan.agents} · {price
+									? annual
+										? 'pago anual, más IVA'
+										: 'pago mensual, más IVA'
+									: 'te enviamos una cotización'}
+							</p>
+							<Button
+								class="mt-6 w-full"
+								variant={plan.highlighted ? 'default' : 'outline'}
+								onclick={() => choosePlan(plan.id)}
+							>
+								{price ? 'Solicitar demo' : 'Cotizar'}
+							</Button>
+							<ul class="mt-6 grid gap-2.5 text-sm">
+								{#each plan.features as feature (feature)}
+									<li class="flex gap-2">
+										<CheckIcon class="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden="true" />
+										{feature}
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/each}
+				</div>
+				<p class="mt-8 text-center text-sm text-muted-foreground">
+					Precios en pesos mexicanos por agente al mes. IVA no incluido.
+				</p>
+			</section>
+
+			<!-- Preguntas frecuentes -->
+			<section id="preguntas" class="scroll-mt-20 border-t bg-card/60 py-24">
+				<div class="mx-auto grid max-w-6xl gap-10 px-4 lg:grid-cols-[1fr_1.6fr]">
+					<div class="reveal">
+						<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Preguntas frecuentes</h2>
+						<p class="mt-3 text-muted-foreground">
+							¿Tienes otra duda? Escríbela en el formulario de demo y te respondemos.
+						</p>
+					</div>
+					<ul class="reveal divide-y rounded-2xl border bg-card" style="--i: 1">
+						{#each faqs as faq, i (faq.q)}
+							<li>
+								<h3>
+									<button
+										type="button"
+										class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left font-medium"
+										aria-expanded={openFaq === i}
+										aria-controls={`faq-${i}`}
+										onclick={() => (openFaq = openFaq === i ? null : i)}
+									>
+										{faq.q}
+										<ChevronDownIcon
+											class={cn(
+												'size-4 shrink-0 text-muted-foreground transition-transform',
+												openFaq === i && 'rotate-180'
+											)}
+											aria-hidden="true"
+										/>
+									</button>
+								</h3>
+								<div id={`faq-${i}`} hidden={openFaq !== i} class="px-6 pb-5 text-muted-foreground">
+									{faq.a}
+								</div>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			</section>
+
+			<!-- Solicitar demo -->
+			<section id="demo" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-24">
 				<div
-					class="cta bg-honeycomb-dark relative overflow-hidden rounded-2xl bg-sidebar px-8 py-16 text-center"
+					class="cta bg-honeycomb-dark relative grid gap-10 overflow-hidden rounded-3xl bg-sidebar p-8 sm:p-12 lg:grid-cols-[1fr_1.3fr]"
 				>
 					<div
-						class="glow-pulse pointer-events-none absolute -bottom-32 left-1/2 -ml-[15rem] size-[30rem] rounded-full bg-honey/25 blur-3xl"
+						class="glow-pulse pointer-events-none absolute -bottom-32 -left-20 size-[30rem] rounded-full bg-honey/25 blur-3xl"
 						aria-hidden="true"
 					></div>
-					<h2 class="relative text-3xl font-bold tracking-tight text-white sm:text-4xl">
-						Pon orden en tu soporte
-					</h2>
-					<p class="relative mx-auto mt-3 max-w-lg text-sidebar-foreground">
-						Crea tu cuenta y abre tu primer ticket en un par de minutos.
-					</p>
-					<Button
-						size="lg"
-						href={resolve('/register')}
-						class="relative mt-8 bg-honey text-honey-foreground hover:bg-honey/90"
-					>
-						Crear una cuenta
-						<ArrowRightIcon aria-hidden="true" />
-					</Button>
+					<div class="relative text-white">
+						<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Pon orden en tu soporte</h2>
+						<p class="mt-3 text-sidebar-foreground">
+							Cuéntanos de tu equipo y te mostramos cómo MiColmena se adapta a tu forma de trabajar.
+						</p>
+						<ul class="mt-8 grid gap-3 text-sm">
+							{#each ['Demo con casos parecidos a los tuyos', 'Te ayudamos a elegir el plan', 'Precios en pesos, sin letras chiquitas'] as point (point)}
+								<li class="flex items-center gap-2">
+									<span class="hex grid size-6 place-items-center bg-honey text-honey-foreground">
+										<CheckIcon class="size-3.5" aria-hidden="true" />
+									</span>
+									{point}
+								</li>
+							{/each}
+						</ul>
+					</div>
+					<div class="relative rounded-2xl bg-card p-6 text-card-foreground shadow-2xl sm:p-8">
+						<DemoForm bind:plan={demoPlan} />
+					</div>
 				</div>
 			</section>
 		</div>
@@ -417,10 +735,23 @@
 
 	<footer class="relative z-10 border-t bg-background">
 		<div
-			class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground"
+			class="mx-auto grid max-w-6xl gap-8 px-4 py-10 text-sm text-muted-foreground sm:grid-cols-[1fr_auto]"
 		>
-			<Logo class="scale-90" />
-			<p>© {new Date().getFullYear()} MiColmena</p>
+			<div>
+				<Logo class="origin-left scale-90" />
+				<p class="mt-3 max-w-xs">Mesa de ayuda en español para empresas en México.</p>
+			</div>
+			<nav class="flex flex-wrap gap-x-6 gap-y-2" aria-label="Pie de página">
+				<!-- eslint-disable svelte/no-navigation-without-resolve -- anclas dentro de esta página -->
+				<a href="#precios" class="hover:text-foreground">Precios</a>
+				<a href="#demo" class="hover:text-foreground">Solicitar demo</a>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				<a href={resolve('/help')} class="hover:text-foreground">Centro de ayuda</a>
+				<a href={resolve('/login')} class="hover:text-foreground">Iniciar sesión</a>
+			</nav>
+			<p class="sm:col-span-2">
+				© {new Date().getFullYear()} MiColmena · Precios en pesos mexicanos, IVA no incluido.
+			</p>
 		</div>
 	</footer>
 </div>

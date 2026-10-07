@@ -10,6 +10,7 @@
 	import MessageSquareQuoteIcon from '@lucide/svelte/icons/message-square-quote';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import SirenIcon from '@lucide/svelte/icons/siren';
+	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
@@ -200,6 +201,11 @@
 		$user?.role === 'admin'
 			? [
 					{ href: resolve('/(app)/admin/users'), label: 'Usuarios', icon: UsersIcon },
+					{
+						href: resolve('/(app)/admin/leads'),
+						label: 'Solicitudes de demo',
+						icon: SparklesIcon
+					},
 					{ href: resolve('/(app)/admin/settings'), label: 'Configuración', icon: SettingsIcon }
 				]
 			: []

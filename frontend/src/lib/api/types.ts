@@ -145,7 +145,8 @@ export interface SlaPolicy {
 	resolution_minutes: number;
 }
 
-export type NotificationKind = 'new_ticket' | 'assigned' | 'comment' | 'mention' | 'status';
+export type NotificationKind =
+	'new_ticket' | 'assigned' | 'comment' | 'mention' | 'status' | 'lead';
 
 export interface Notification {
 	id: number;
@@ -273,4 +274,26 @@ export interface UpdateUserInput {
 	role?: Role;
 	active?: boolean;
 	password?: string;
+}
+
+export const LEAD_TEAM_SIZES = ['1-3', '4-10', '11-25', '26+'] as const;
+export const LEAD_PLANS = ['emprendedor', 'profesional', 'empresa'] as const;
+export type LeadPlan = (typeof LEAD_PLANS)[number];
+
+export interface LeadInput {
+	name: string;
+	company: string;
+	email: string;
+	phone: string;
+	team_size: (typeof LEAD_TEAM_SIZES)[number] | '';
+	plan: LeadPlan | '';
+	message: string;
+	/** Campo trampa para bots: siempre vacío. */
+	website?: string;
+}
+
+export interface Lead extends Omit<LeadInput, 'website'> {
+	id: number;
+	handled: boolean;
+	created_at: string;
 }
