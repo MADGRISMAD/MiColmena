@@ -17,13 +17,15 @@ func loginAttempt(e *env, email, password string, opts ...reqOpt) response {
 func TestAuthRateLimitPerIP(t *testing.T) {
 	e := newEnv(t, func(o *api.Options) { o.AuthRatePerMin = 10 })
 
-	// Emails distintos para medir solo el límite por IP, no el bloqueo por email.
-	for i := 1; i <= 10; i++ {
-		res := loginAttempt(e, "u"+strconv.Itoa(i)+"@x.com", "incorrecta")
-		if res.Status != http.StatusUnauthorized {
-			t.Fatalf("intento %d: %d, se esperaba 401", i, res.Status)
+	// La ficha se repone cada 6 s, así que los intentos deben ser rápidos: registros vacíos
+	// (comparten el límite y fallan en la validación, sin bcrypt) y un solo login.
+	for i := 1; i <= 9; i++ {
+		res := e.post("/api/auth/register", "", map[string]any{})
+		if res.Status != http.StatusUnprocessableEntity {
+			t.Fatalf("intento %d: %d, se esperaba 422", i, res.Status)
 		}
 	}
+	expectStatus(t, loginAttempt(e, "u10@x.com", "incorrecta"), http.StatusUnauthorized)
 
 	res := loginAttempt(e, "u11@x.com", "incorrecta")
 	expectStatus(t, res, http.StatusTooManyRequests)
