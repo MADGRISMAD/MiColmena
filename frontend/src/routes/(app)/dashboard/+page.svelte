@@ -23,6 +23,8 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { formatHours, formatRelative, priorityLabels, statusLabels } from '#lib/format.js';
 	import { liveEvent } from '#lib/live/index.js';
+	import WelcomeChecklist from '#lib/components/welcome-checklist.svelte';
+	import { org } from '#lib/stores/org.js';
 	import { cn } from '#lib/utils.js';
 	import { isStaff, user } from '#lib/stores/auth.js';
 
@@ -84,6 +86,10 @@
 	title={`Hola, ${firstName}`}
 	description={`Así está el soporte hoy, ${today}.`}
 />
+
+{#if $org && !$org.platform && $user?.role === 'admin'}
+	<WelcomeChecklist org={$org} />
+{/if}
 
 {#snippet kpi(
 	label: string,

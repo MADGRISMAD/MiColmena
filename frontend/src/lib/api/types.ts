@@ -20,6 +20,8 @@ export interface User {
 	created_at: string;
 	/** Administrador permanente: no se desactiva, ni se le cambia el rol o el email. */
 	permanent?: boolean;
+	/** Empresa a la que pertenece la cuenta. */
+	org_id: number;
 }
 
 export interface UserRef {
@@ -173,6 +175,8 @@ export interface Article {
 	author: UserRef | null;
 	created_at: string;
 	updated_at: string;
+	/** Empresa dueña del artículo (cada empresa tiene su centro de ayuda). */
+	org: OrgChoice;
 }
 
 export interface ArticleInput {
@@ -300,4 +304,46 @@ export interface Lead extends Omit<LeadInput, 'website'> {
 	plan: LeadPlan | '';
 	handled: boolean;
 	created_at: string;
+}
+
+/** Una empresa entre las que el email tiene cuenta (para elegir al iniciar sesión). */
+export interface OrgChoice {
+	slug: string;
+	name: string;
+}
+
+export interface Organization {
+	id: number;
+	name: string;
+	/** Dirección del portal: /e/<slug>. */
+	slug: string;
+	/** Personas en la empresa (definen el precio). */
+	people: number;
+	/** Agentes permitidos por el plan; null = sin límite. */
+	max_agents: number | null;
+	suspended: boolean;
+	created_at: string;
+}
+
+export interface OrgUsage extends Organization {
+	/** Agentes y administradores activos. */
+	agents: number;
+	/** La empresa de la propia plataforma (sin plan ni límites). */
+	platform: boolean;
+}
+
+export interface PlatformOrg extends Organization {
+	agents: number;
+	customers: number;
+	tickets: number;
+	last_ticket_at: string | null;
+}
+
+export interface SignupInput {
+	company: string;
+	people: number;
+	name: string;
+	email: string;
+	password: string;
+	accept_terms: boolean;
 }

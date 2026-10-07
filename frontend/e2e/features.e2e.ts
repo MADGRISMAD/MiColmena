@@ -161,6 +161,7 @@ test('la ayuda publicada se lee sin iniciar sesión', async ({ page }) => {
 		category: 'Facturación',
 		published: true,
 		author: null,
+		org: { slug: 'ferreteria-lopez', name: 'Ferretería López' },
 		created_at: new Date().toISOString(),
 		updated_at: new Date().toISOString()
 	});

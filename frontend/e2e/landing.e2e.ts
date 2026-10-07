@@ -52,7 +52,11 @@ test('1 agente y hasta 10 personas es gratis para siempre', async ({ page }) => 
 	await expect(pricing.getByText('1 agente incluido')).toBeVisible();
 
 	await pricing.getByLabel(/^Agentes/).fill('1');
-	await pricing.getByRole('button', { name: 'Quiero el plan gratis' }).click();
+	await expect(pricing.getByRole('link', { name: 'Crear mi cuenta gratis' })).toHaveAttribute(
+		'href',
+		'/signup?people=10'
+	);
+	await pricing.getByRole('button', { name: 'o solicita una demo' }).click();
 	await expect(page.locator('#demo').getByTestId('quote')).toContainText('plan gratis');
 });
 
@@ -69,7 +73,7 @@ test('la demo se pide con el precio calculado', async ({ page }) => {
 	await page.goto('/');
 	const pricing = page.locator('#precios');
 	await pricing.getByLabel(/^Agentes/).fill('8');
-	await pricing.getByRole('button', { name: 'Solicitar demo con este precio' }).click();
+	await pricing.getByRole('button', { name: 'o solicita una demo con este precio' }).click();
 
 	const form = page.locator('#demo');
 	await expect(form.getByTestId('quote')).toContainText('8 agentes');

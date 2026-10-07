@@ -131,16 +131,16 @@
 
 	const steps = [
 		{
-			title: 'Pide tu demo',
-			text: 'Te mostramos MiColmena con casos como los tuyos y resolvemos tus dudas.'
+			title: 'Crea tu cuenta gratis',
+			text: 'En un minuto y sin tarjeta. Tu empresa queda lista con categorías y plazos de ejemplo.'
 		},
 		{
 			title: 'Configura tu equipo',
-			text: 'Das de alta a tus agentes, tus categorías y los plazos de atención.'
+			text: 'Das de alta a tus agentes, ajustas tus categorías y escribes tus primeras respuestas.'
 		},
 		{
-			title: 'Recibe tickets',
-			text: 'Tus clientes escriben desde tu portal y tu equipo los resuelve en orden.'
+			title: 'Comparte tu portal',
+			text: 'Tus clientes abren tickets desde tu portal y tu equipo los resuelve en orden.'
 		}
 	];
 
@@ -170,8 +170,8 @@
 			a: 'No. MiColmena funciona en el navegador, en la computadora o en el celular, para tu equipo y para tus clientes.'
 		},
 		{
-			q: '¿Puedo verlo antes de contratar?',
-			a: 'Sí. Llena el formulario de demo y te enseñamos MiColmena con casos parecidos a los de tu empresa.'
+			q: '¿Puedo probarlo antes de contratar?',
+			a: 'Sí: crea tu cuenta gratis y úsalo con tu equipo el tiempo que quieras. Si prefieres que te lo enseñemos, pide una demo.'
 		}
 	];
 
@@ -305,8 +305,9 @@
 					<Button href={resolve('/(app)/tickets')}>Ir a mis tickets</Button>
 				{:else}
 					<Button variant="ghost" href={resolve('/login')}>Iniciar sesión</Button>
-					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- ancla dentro de esta página -->
-					<Button href="#demo" class="hidden sm:inline-flex">Solicitar demo</Button>
+					<Button href={resolve('/signup')} class="hidden sm:inline-flex"
+						>Crear cuenta gratis</Button
+					>
 				{/if}
 			</div>
 		</div>
@@ -381,13 +382,12 @@
 						esperas de una plataforma de soporte empresarial, con un precio pensado para México.
 					</p>
 					<div class="enter mt-8 flex flex-wrap gap-3" style="--delay: 850ms">
-						<!-- eslint-disable svelte/no-navigation-without-resolve -- anclas dentro de esta página -->
-						<Button size="lg" href="#demo">
-							Solicitar una demo
+						<Button size="lg" href={resolve('/signup')}>
+							Empieza gratis
 							<ArrowRightIcon aria-hidden="true" />
 						</Button>
-						<Button size="lg" variant="outline" href="#precios">Ver precios</Button>
-						<!-- eslint-enable svelte/no-navigation-without-resolve -->
+						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- ancla dentro de esta página -->
+						<Button size="lg" variant="outline" href="#demo">Solicitar una demo</Button>
 					</div>
 					<ul
 						class="enter mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground"
@@ -652,6 +652,10 @@
 						<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Pon orden en tu soporte</h2>
 						<p class="mt-3 text-sidebar-foreground">
 							Cuéntanos de tu equipo y te mostramos cómo MiColmena se adapta a tu forma de trabajar.
+							¿Prefieres probar por tu cuenta?
+							<a href={resolve('/signup')} class="font-medium text-honey underline"
+								>Crea tu cuenta gratis</a
+							>.
 						</p>
 						<ul class="mt-8 grid gap-3 text-sm">
 							{#each ['Demo con casos parecidos a los tuyos', 'Te confirmamos el precio para tu equipo', 'Precios en pesos, sin letras chiquitas'] as point (point)}
@@ -685,8 +689,11 @@
 				<a href="#precios" class="hover:text-foreground">Precios</a>
 				<a href="#demo" class="hover:text-foreground">Solicitar demo</a>
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				<a href={resolve('/signup')} class="hover:text-foreground">Crear cuenta</a>
 				<a href={resolve('/help')} class="hover:text-foreground">Centro de ayuda</a>
 				<a href={resolve('/login')} class="hover:text-foreground">Iniciar sesión</a>
+				<a href={resolve('/terminos')} class="hover:text-foreground">Términos</a>
+				<a href={resolve('/privacidad')} class="hover:text-foreground">Privacidad</a>
 			</nav>
 			<p class="sm:col-span-2">
 				© {new Date().getFullYear()} MiColmena · Precios en pesos mexicanos, IVA no incluido.

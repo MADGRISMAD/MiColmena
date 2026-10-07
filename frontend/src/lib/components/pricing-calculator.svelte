@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import {
@@ -218,10 +219,17 @@
 			<Button
 				size="lg"
 				class="mt-8 w-full bg-honey text-honey-foreground hover:bg-honey/90"
+				href={resolve(`/signup?people=${people}`)}
+			>
+				{e.free ? 'Crear mi cuenta gratis' : 'Empezar gratis'}
+			</Button>
+			<button
+				type="button"
+				class="mt-3 text-sm text-sidebar-foreground underline-offset-4 hover:text-white hover:underline"
 				onclick={onrequest}
 			>
-				{e.free ? 'Quiero el plan gratis' : 'Solicitar demo con este precio'}
-			</Button>
+				{e.free ? 'o solicita una demo' : 'o solicita una demo con este precio'}
+			</button>
 		{/if}
 		<ul class="mt-6 grid gap-1.5 text-sm text-sidebar-foreground">
 			{#each ['Todas las funciones incluidas', 'Sin cobro por ticket ni por cliente'] as point (point)}

@@ -21,6 +21,8 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { formatDateTime, roleLabels } from '#lib/format.js';
 	import { user as me } from '#lib/stores/auth.js';
+	import { loadOrg, org } from '#lib/stores/org.js';
+	import { resolve } from '$app/paths';
 	import { cn } from '#lib/utils.js';
 
 	let users = $state<User[] | null>(null);
@@ -67,7 +69,7 @@
 			toast.success(`${created.name} ya puede entrar con su email y la contraseña inicial`);
 			creating = false;
 			draft = { name: '', email: '', role: 'agent', password: '' };
-			await load();
+			await Promise.all([load(), loadOrg()]);
 		} catch (err) {
 			if (err instanceof ApiError && Object.keys(err.fields).length) fieldErrors = err.fields;
 			else toast.error(err instanceof Error ? err.message : 'No se pudo crear el usuario');
@@ -80,6 +82,7 @@
 			const updated = await api.updateUser(u.id, input);
 			users = users?.map((x) => (x.id === u.id ? updated : x)) ?? null;
 			toast.success(message);
+			loadOrg();
 		} catch (err) {
 			const fields = err instanceof ApiError ? Object.values(err.fields) : [];
 			toast.error(fields[0] ?? (err instanceof Error ? err.message : 'No se pudo guardar'));
@@ -126,6 +129,28 @@
 	{/snippet}
 </PageHeader>
 
+{#if $org && $org.max_agents !== null}
+	<p
+		class={cn(
+			'mb-4 flex flex-wrap items-center gap-x-2 rounded-lg border px-4 py-3 text-sm',
+			$org.agents >= $org.max_agents
+				? 'border-amber-400 bg-amber-50 dark:bg-amber-500/10'
+				: 'bg-card'
+		)}
+		data-testid="agent-limit"
+	>
+		<span>
+			Agentes: <strong>{$org.agents} de {$org.max_agents}</strong> incluidos en tu plan.
+		</span>
+		{#if $org.agents >= $org.max_agents}
+			<a
+				href={resolve('/(app)/admin/plan')}
+				class="font-medium text-primary underline dark:text-honey">Ampliar plan</a
+			>
+		{/if}
+	</p>
+{/if}
+
 {#if creating}
 	<Card.Root class="mb-6 border-honey/60">
 		<Card.Header>
@@ -153,11 +178,17 @@
 				</div>
 				<div class="grid gap-1.5">
 					<Label for="new-role">Rol</Label>
-					<NativeSelect id="new-role" class="w-full" bind:value={draft.role}>
+					<NativeSelect
+						id="new-role"
+						class="w-full"
+						bind:value={draft.role}
+						aria-invalid={!!fieldErrors.role}
+					>
 						{#each ROLES as role (role)}
 							<NativeSelectOption value={role}>{roleLabels[role]}</NativeSelectOption>
 						{/each}
 					</NativeSelect>
+					{#if fieldErrors.role}<p class="text-sm text-destructive">{fieldErrors.role}</p>{/if}
 				</div>
 				<div class="grid gap-1.5">
 					<Label for="new-password">Contraseña inicial</Label>

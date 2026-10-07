@@ -12,6 +12,8 @@
 	import SirenIcon from '@lucide/svelte/icons/siren';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import UsersIcon from '@lucide/svelte/icons/users';
+	import BuildingIcon from '@lucide/svelte/icons/building-2';
+	import GaugeIcon from '@lucide/svelte/icons/gauge';
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
 	import MenuIcon from '@lucide/svelte/icons/menu';
@@ -29,6 +31,7 @@
 	import NotificationBell from '#lib/components/notification-bell.svelte';
 	import { liveEvent, startLive } from '#lib/live/index.js';
 	import { loadViews, removeView, savedViews } from '#lib/stores/views.js';
+	import { loadOrg, org } from '#lib/stores/org.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Toaster } from '#lib/components/ui/sonner/index.js';
@@ -66,6 +69,7 @@
 	$effect(() => {
 		if (!$user) return;
 		loadViews();
+		loadOrg();
 		return startLive();
 	});
 
@@ -197,16 +201,30 @@
 			: [])
 	]);
 
+	// Administradores permanentes de la empresa de la plataforma: gestionan todas las empresas.
+	const platformOwner = $derived(!!$user?.permanent && !!$org?.platform);
+
 	const adminLinks = $derived<Link[]>(
 		$user?.role === 'admin'
 			? [
 					{ href: resolve('/(app)/admin/users'), label: 'Usuarios', icon: UsersIcon },
+					...($org && !$org.platform
+						? [{ href: resolve('/(app)/admin/plan'), label: 'Tu plan', icon: GaugeIcon }]
+						: []),
+					{ href: resolve('/(app)/admin/settings'), label: 'Configuración', icon: SettingsIcon }
+				]
+			: []
+	);
+
+	const platformLinks = $derived<Link[]>(
+		platformOwner
+			? [
+					{ href: resolve('/(app)/platform'), label: 'Empresas', icon: BuildingIcon },
 					{
 						href: resolve('/(app)/admin/leads'),
 						label: 'Solicitudes de demo',
 						icon: SparklesIcon
-					},
-					{ href: resolve('/(app)/admin/settings'), label: 'Configuración', icon: SettingsIcon }
+					}
 				]
 			: []
 	);
@@ -224,6 +242,14 @@
 	<div class="flex h-16 shrink-0 items-center px-5">
 		<a href={resolve('/')} aria-label="MiColmena, inicio"><Logo tone="dark" /></a>
 	</div>
+	{#if $org && !$org.platform}
+		<p
+			class="-mt-2 mb-2 truncate px-5 text-xs font-medium text-sidebar-foreground/70"
+			title={$org.name}
+		>
+			{$org.name}
+		</p>
+	{/if}
 
 	<nav class="flex-1 space-y-6 overflow-y-auto px-3 py-2" aria-label="Navegación principal">
 		{#if $isStaff}
@@ -313,7 +339,7 @@
 			</div>
 		{/if}
 
-		{#each [{ title: 'Recursos', links: resources }, { title: 'Administración', links: adminLinks }] as section (section.title)}
+		{#each [{ title: 'Recursos', links: resources }, { title: 'Administración', links: adminLinks }, { title: 'Plataforma', links: platformLinks }] as section (section.title)}
 			{#if section.links.length > 0}
 				<div>
 					<p

@@ -10,6 +10,8 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { formatMinutes } from '#lib/sla.js';
+	import PortalLink from '#lib/components/portal-link.svelte';
+	import { loadOrg, org } from '#lib/stores/org.js';
 
 	// --- Categorías ---
 	let categories = $state<Category[] | null>(null);
@@ -100,6 +102,26 @@
 		loadCategories();
 		loadSla();
 	});
+
+	// --- Empresa ---
+	let companyName = $state('');
+	$effect(() => {
+		if ($org && !companyName) companyName = $org.name;
+	});
+	async function saveCompany(event: SubmitEvent) {
+		event.preventDefault();
+		try {
+			org.set(await api.updateOrg(companyName.trim()));
+			toast.success('Nombre guardado');
+		} catch (err) {
+			toast.error(
+				err instanceof ApiError ? (err.fields.name ?? err.message) : 'No se pudo guardar'
+			);
+		}
+	}
+	$effect(() => {
+		loadOrg();
+	});
 </script>
 
 <PageHeader
@@ -109,6 +131,25 @@
 />
 
 <div class="grid gap-6 xl:grid-cols-2">
+	{#if $org}
+		<Card.Root class="xl:col-span-2">
+			<Card.Header>
+				<Card.Title>Empresa</Card.Title>
+				<Card.Description
+					>El nombre aparece en tu portal y en los correos a tus clientes.</Card.Description
+				>
+			</Card.Header>
+			<Card.Content class="grid gap-4 md:grid-cols-2">
+				<form class="flex gap-2" onsubmit={saveCompany}>
+					<Input bind:value={companyName} aria-label="Nombre de la empresa" />
+					<Button type="submit" disabled={!companyName.trim() || companyName.trim() === $org.name}
+						>Guardar</Button
+					>
+				</form>
+				<PortalLink slug={$org.slug} />
+			</Card.Content>
+		</Card.Root>
+	{/if}
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>Categorías</Card.Title>

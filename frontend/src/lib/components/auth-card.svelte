@@ -8,14 +8,25 @@
 		title,
 		description,
 		children,
-		footer
-	}: { title: string; description: string; children: Snippet; footer: Snippet } = $props();
-
-	const points = [
-		'Cada solicitud en su celda: nada se pierde en el correo.',
-		'Notas internas para coordinar al equipo sin que el cliente las vea.',
-		'Prioridades y estados claros para atender primero lo urgente.'
-	];
+		footer,
+		headline = 'El soporte de tu equipo, organizado como una colmena.',
+		points = [
+			'Cada solicitud en su celda: nada se pierde en el correo.',
+			'Notas internas para coordinar al equipo sin que el cliente las vea.',
+			'Prioridades y estados claros para atender primero lo urgente.'
+		],
+		wide = false
+	}: {
+		title: string;
+		description: string;
+		children: Snippet;
+		footer: Snippet;
+		/** Frase del panel de marca; en el portal de una empresa, su nombre. */
+		headline?: string;
+		points?: string[];
+		/** Formulario más ancho (registro de empresa). */
+		wide?: boolean;
+	} = $props();
 </script>
 
 <div class="grid min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -31,7 +42,7 @@
 
 		<div class="relative max-w-md">
 			<p class="text-3xl leading-tight font-semibold text-balance text-white">
-				El soporte de tu equipo, organizado como una colmena.
+				{headline}
 			</p>
 			<ul class="mt-8 grid gap-4">
 				{#each points as point (point)}
@@ -54,7 +65,7 @@
 
 	<!-- Formulario -->
 	<main class="flex items-center justify-center px-4 py-10 sm:px-6">
-		<div class="w-full max-w-sm">
+		<div class={wide ? 'w-full max-w-lg' : 'w-full max-w-sm'}>
 			<a href={resolve('/')} class="mb-10 inline-flex lg:hidden"><Logo /></a>
 			<h1 class="text-2xl font-bold tracking-tight">{title}</h1>
 			<p class="mt-1 text-muted-foreground">{description}</p>

@@ -14,6 +14,8 @@ Plataforma de gestión de tickets de soporte y atención al cliente.
 - **Centro de ayuda** público con buscador; al abrir un ticket se sugieren artículos.
 - **Reportes** por periodo (volumen, tiempos, SLA, satisfacción, por agente y categoría) y **exportación a CSV**.
 - **Administración**: alta de agentes, roles, desactivar cuentas, categorías y plazos de SLA.
+- **Multiempresa**: cada empresa se registra sola en `/signup`, tiene su portal (`/e/<empresa>`), sus usuarios, tickets, categorías, SLA, respuestas guardadas y artículos, y no ve nada de las demás.
+- **Planes**: límite de agentes por empresa, página *Tu plan* con el uso y solicitud de ampliación, y una sola sesión a la vez por agente.
 - **Cuenta**: perfil, cambio de contraseña (cierra las demás sesiones) y recuperación por correo.
 
 ## Estructura
@@ -104,7 +106,9 @@ Todas las rutas, salvo `health`, `register` y `login`, requieren `Authorization:
 | Método | Ruta | Quién | Descripción |
 |---|---|---|---|
 | GET | `/api/health` | todos | Estado del servicio y la base de datos |
-| POST | `/api/auth/register` · `login` | todos | Crea una cuenta de cliente / devuelve un token |
+| POST | `/api/signup` | todos | Registra una empresa nueva con su administrador (plan gratis, 1 agente) |
+| GET | `/api/portal/{slug}` | todos | Nombre de la empresa de un portal |
+| POST | `/api/auth/register` · `login` | todos | Crea una cuenta de cliente en una empresa (`org`) / devuelve un token. Si el email tiene cuenta en varias empresas, `login` responde 409 con la lista para elegir |
 | POST | `/api/auth/forgot` · `reset` | todos | Envía el enlace de recuperación / cambia la contraseña con él |
 | GET, PATCH | `/api/me` | autenticado | Usuario actual; cambiar nombre, email (pide la contraseña) y avisos por correo |
 | POST | `/api/me/password` | autenticado | Cambia la contraseña y devuelve un token nuevo |
@@ -129,14 +133,30 @@ Todas las rutas, salvo `health`, `register` y `login`, requieren `Authorization:
 | GET · PUT | `/api/sla` | agentes · admin | Plazos por prioridad |
 | GET | `/api/reports`, `/api/reports/tickets.csv` | agentes | Reporte por rango (`from`, `to`, `tz`) y exportación |
 | GET · POST, PATCH, DELETE | `/api/articles` | todos · agentes | Centro de ayuda (sin sesión, solo los publicados) |
-| POST · GET, PATCH | `/api/leads` | todos · admin | Solicitudes de demo desde la landing |
+| GET · PATCH | `/api/org` | autenticado · admin | Empresa actual, agentes usados y límite; cambiar el nombre |
+| POST | `/api/org/upgrade` | admin | Pedir más agentes (llega como solicitud a la plataforma) |
+| GET · PATCH | `/api/platform/orgs`, `/api/platform/orgs/{id}` | plataforma | Todas las empresas; cambiar agentes permitidos, personas o suspender |
+| POST · GET, PATCH | `/api/leads` | todos · plataforma | Solicitudes de demo desde la landing |
 
-Los clientes solo ven sus propios tickets.
+Los clientes solo ven sus propios tickets. Todo se filtra por la empresa del usuario: un id de otra empresa responde 404.
+
+## Multiempresa y planes
+
+- **Empresa 1 = la plataforma (MiColmena).** La migración `008_organizations.sql` mueve ahí los datos que ya existían. Sus administradores permanentes (`ADMIN_EMAIL` y los de `permanent.go`) ven *Plataforma → Empresas* y *Solicitudes de demo*: ahí ajustan los agentes permitidos de cada empresa (vacío = sin límite), las personas y suspenden cuentas (nadie de una empresa suspendida puede entrar y su portal deja de existir).
+- **Registro.** `/signup` crea la empresa con su dirección (`/e/ferreteria-lopez`), 1 agente permitido, categorías y plazos de SLA de ejemplo, y su administrador. Los clientes se registran desde el portal de la empresa; el mismo email puede tener cuenta en varias empresas.
+- **Límite de agentes.** Agentes + administradores activos no pueden pasar de `max_agents`. Al llegar al límite, el administrador pide ampliar desde *Tu plan*; la solicitud llega a la plataforma con el precio estimado. Para activarlo, sube el límite en *Plataforma → Empresas*. **Aún no hay cobro automático ni facturación (CFDI)**: el cobro se hace por fuera.
+- **Una sesión por agente.** Al iniciar sesión, un agente o administrador cierra sus sesiones en otros dispositivos (el otro ve el motivo al volver al login). Los clientes pueden tener varias.
+- **Las personas de la empresa son declaradas** por el cliente al registrarse; la plataforma puede corregirlas.
+- **Los números de ticket son globales**, no empiezan en 1 en cada empresa.
+
+## Avisos legales
+
+`/privacidad` (aviso de privacidad, LFPDPPP) y `/terminos` son **borradores** con datos entre `[corchetes]` (razón social, domicilio, RFC, contacto…) y un aviso visible de borrador. Deben revisarse con un abogado antes de vender; luego se quita el aviso en `frontend/src/lib/components/legal-page.svelte`.
 
 ## Página principal y ventas
 
 - **Precio = cuota según cuántas personas tiene la empresa + precio por cada agente** (más barato a partir del sexto), en pesos y más IVA, con 2 meses gratis en pago anual. Todas las funciones van incluidas. **1 agente y hasta 10 personas es gratis para siempre**; en empresas de ese tamaño el primer agente sigue incluido aunque agreguen más. La landing tiene una calculadora con dos sliders (agentes y personas). Los montos se cambian en `frontend/src/lib/pricing.ts`; la calculadora, el formulario de demo y el panel de solicitudes los leen de ahí.
-- El formulario **Solicitar demo** guarda la solicitud con los agentes y personas elegidos en la calculadora (`POST /api/leads`, con límite por IP y un campo trampa contra bots) y avisa a los administradores en la campana y por correo. Se gestionan en *Administración → Solicitudes de demo*.
+- El formulario **Solicitar demo** guarda la solicitud con los agentes y personas elegidos en la calculadora (`POST /api/leads`, con límite por IP y un campo trampa contra bots) y avisa a los administradores de la plataforma en la campana y por correo. Se gestionan en *Plataforma → Solicitudes de demo*.
 
 ## Correo y adjuntos
 

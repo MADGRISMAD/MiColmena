@@ -45,3 +45,28 @@ export function clearSession() {
 export function currentToken(): string | null {
 	return get(token);
 }
+
+const LOGOUT_REASON_KEY = 'micolmena_logout_reason';
+
+/** Cierra la sesión porque la API la rechazó, y guarda el motivo para mostrarlo en el login. */
+export function sessionExpired(message: string) {
+	if (get(token)) {
+		try {
+			sessionStorage.setItem(LOGOUT_REASON_KEY, message);
+		} catch {
+			// Sin almacenamiento: el login simplemente no muestra el motivo.
+		}
+	}
+	clearSession();
+}
+
+/** Devuelve (y olvida) el motivo por el que se cerró la última sesión. */
+export function takeLogoutReason(): string | null {
+	try {
+		const reason = sessionStorage.getItem(LOGOUT_REASON_KEY);
+		sessionStorage.removeItem(LOGOUT_REASON_KEY);
+		return reason;
+	} catch {
+		return null;
+	}
+}

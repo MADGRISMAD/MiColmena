@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
 	import { api, ApiError, type LeadInput } from '#lib/api/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -170,7 +171,8 @@
 				{sending ? 'Enviando…' : 'Solicitar mi demo'}
 			</Button>
 			<p class="text-xs text-muted-foreground">
-				Sin compromiso. Solo usamos tus datos para contactarte.
+				Sin compromiso. Usamos tus datos solo para contactarte, según el
+				<a href={resolve('/privacidad')} target="_blank" class="underline">aviso de privacidad</a>.
 			</p>
 		</div>
 	</form>

@@ -16,11 +16,21 @@ import type {
 const now = () => new Date().toISOString();
 const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
 
-const base = { active: true, email_notifications: true };
+const base = { active: true, email_notifications: true, org_id: 2 };
 export const users = {
 	agent: { id: 1, name: 'Luis Agente', email: 'luis@micolmena.dev', role: 'agent', ...base },
 	customer: { id: 2, name: 'Ana Cliente', email: 'ana@micolmena.dev', role: 'customer', ...base },
-	admin: { id: 4, name: 'Marta Admin', email: 'marta@micolmena.dev', role: 'admin', ...base }
+	admin: { id: 4, name: 'Marta Admin', email: 'marta@micolmena.dev', role: 'admin', ...base },
+	/** Administradora permanente de la plataforma (empresa 1). */
+	owner: {
+		id: 5,
+		name: 'Dueña',
+		email: 'madgrismad@gmail.com',
+		role: 'admin',
+		...base,
+		org_id: 1,
+		permanent: true
+	}
 } satisfies Record<string, Omit<User, 'created_at'>>;
 
 const PASSWORD = 'secreto123';
@@ -35,6 +45,21 @@ export class FakeApi {
 	views: SavedView[] = [];
 	articles: Article[] = [];
 	categories = [{ id: 1, name: 'Facturación', created_at: now() }];
+	org = {
+		id: 2,
+		name: 'Ferretería López',
+		slug: 'ferreteria-lopez',
+		people: 10,
+		max_agents: 1 as number | null,
+		suspended: false,
+		created_at: now(),
+		agents: 1,
+		platform: false
+	};
+	signups: Record<string, unknown>[] = [];
+	upgrades: Record<string, unknown>[] = [];
+	/** Si la API debe rechazar la sesión con este mensaje (401). */
+	revokeWith: string | null = null;
 	leads: Record<string, string>[] = [];
 	requests: { method: string; path: string; body: unknown }[] = [];
 	private nextId = 1;
@@ -117,6 +142,37 @@ export class FakeApi {
 
 		const json = (status: number, data: unknown) => route.fulfill({ status, json: data });
 
+		if (method === 'POST' && path === '/signup') {
+			this.signups.push(body);
+			return json(201, {
+				token: 'admin',
+				expires_at: now(),
+				user: { ...users.admin, name: body.name, email: body.email, created_at: now() }
+			});
+		}
+		const portal = path.match(/^\/portal\/([a-z0-9-]+)$/);
+		if (portal) {
+			return portal[1] === this.org.slug
+				? json(200, { name: this.org.name, slug: this.org.slug })
+				: json(404, { error: 'esa empresa no existe o no está disponible' });
+		}
+		// Un email con cuenta en dos empresas: hay que elegir.
+		if (method === 'POST' && path === '/auth/login' && body.email === 'multi@correo.dev') {
+			if (!body.org) {
+				return json(409, {
+					error: 'tienes cuenta en varias empresas: elige a cuál entrar',
+					organizations: [
+						{ slug: 'ferreteria-lopez', name: 'Ferretería López' },
+						{ slug: 'taller-luna', name: 'Taller Luna' }
+					]
+				});
+			}
+			return json(200, {
+				token: 'customer',
+				expires_at: now(),
+				user: { ...users.customer, created_at: now() }
+			});
+		}
 		if (method === 'POST' && path === '/auth/login') {
 			const user = Object.entries(users).find(([, u]) => u.email === body.email);
 			if (!user || body.password !== PASSWORD) {
@@ -154,6 +210,24 @@ export class FakeApi {
 
 		const me = this.currentUser(route);
 		if (!me) return json(401, { error: 'falta el token de acceso' });
+		if (this.revokeWith) return json(401, { error: this.revokeWith });
+
+		if (path === '/org' && method === 'GET') {
+			return json(200, me.org_id === 1 ? { ...this.org, id: 1, platform: true } : this.org);
+		}
+		if (path === '/org/upgrade') {
+			this.upgrades.push(body);
+			return route.fulfill({ status: 201 });
+		}
+		if (path === '/platform/orgs/2' && method === 'PATCH') {
+			Object.assign(this.org, body);
+			return json(200, { ...this.org, customers: 4, tickets: 12, last_ticket_at: now() });
+		}
+		if (path === '/platform/orgs') {
+			return json(200, {
+				items: [{ ...this.org, customers: 4, tickets: 12, last_ticket_at: now() }]
+			});
+		}
 		const staff = me.role !== 'customer';
 
 		if (path === '/stream') return route.fulfill({ status: 204 });

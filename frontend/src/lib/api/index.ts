@@ -1,4 +1,4 @@
-import { clearSession, currentToken } from '#lib/stores/auth.js';
+import { currentToken, sessionExpired } from '#lib/stores/auth.js';
 import { createApiClient } from './client';
 
 export { ApiError, createApiClient, toQuery, type ApiClient } from './client';
@@ -12,5 +12,5 @@ export * from './types';
 export const api = createApiClient({
 	baseUrl: import.meta.env.VITE_API_URL ?? '',
 	getToken: currentToken,
-	onUnauthorized: clearSession
+	onUnauthorized: sessionExpired
 });

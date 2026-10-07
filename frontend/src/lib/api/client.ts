@@ -14,6 +14,11 @@ import type {
 	Macro,
 	MacroInput,
 	NotificationList,
+	OrgChoice,
+	OrgUsage,
+	Organization,
+	PlatformOrg,
+	SignupInput,
 	Page,
 	Report,
 	ReportRange,
@@ -36,7 +41,9 @@ export class ApiError extends Error {
 	constructor(
 		readonly status: number,
 		message: string,
-		readonly fields: Record<string, string> = {}
+		readonly fields: Record<string, string> = {},
+		/** Cuerpo completo de la respuesta, por ejemplo la lista de empresas de un 409 al iniciar sesión. */
+		readonly data: Record<string, unknown> | null = null
 	) {
 		super(message);
 		this.name = 'ApiError';
@@ -49,7 +56,7 @@ export interface ApiClientOptions {
 	/** Devuelve el token actual, o null si no hay sesión. */
 	getToken?: () => string | null;
 	/** Se llama cuando la API responde 401, para cerrar la sesión. */
-	onUnauthorized?: () => void;
+	onUnauthorized?: (message: string) => void;
 	fetch?: typeof fetch;
 }
 
@@ -89,8 +96,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
 		if (!res.ok) {
 			const data = await res.json().catch(() => null);
-			if (res.status === 401) options.onUnauthorized?.();
-			throw new ApiError(res.status, data?.error ?? `Error ${res.status}`, data?.fields ?? {});
+			const message = data?.error ?? `Error ${res.status}`;
+			if (res.status === 401) options.onUnauthorized?.(message);
+			throw new ApiError(res.status, message, data?.fields ?? {}, data);
 		}
 		return res;
 	}
@@ -107,10 +115,23 @@ export function createApiClient(options: ApiClientOptions = {}) {
 	return {
 		health: () => request<{ status: string }>('GET', '/health'),
 
-		login: (email: string, password: string) =>
-			request<AuthResponse>('POST', '/auth/login', { email, password }),
-		register: (name: string, email: string, password: string) =>
-			request<AuthResponse>('POST', '/auth/register', { name, email, password }),
+		/** Con varias empresas para ese email, responde 409 con `organizations` para elegir. */
+		login: (email: string, password: string, org = '') =>
+			request<AuthResponse>('POST', '/auth/login', { email, password, org }),
+		/** org: slug del portal de la empresa; vacío = soporte de la plataforma. */
+		register: (name: string, email: string, password: string, org = '') =>
+			request<AuthResponse>('POST', '/auth/register', { name, email, password, org }),
+		signup: (input: SignupInput) => request<AuthResponse>('POST', '/signup', input),
+		getPortal: (slug: string) => request<OrgChoice>('GET', `/portal/${encodeURIComponent(slug)}`),
+		getOrg: () => request<OrgUsage>('GET', '/org'),
+		updateOrg: (name: string) => request<OrgUsage>('PATCH', '/org', { name }),
+		requestUpgrade: (input: { agents: number; people: number; message: string }) =>
+			request<null>('POST', '/org/upgrade', input),
+		listPlatformOrgs: () => request<List<PlatformOrg>>('GET', '/platform/orgs'),
+		updatePlatformOrg: (
+			id: number,
+			input: { people?: number; max_agents?: number; unlimited?: boolean; suspended?: boolean }
+		) => request<Organization>('PATCH', `/platform/orgs/${id}`, input),
 		me: () => request<User>('GET', '/me'),
 		updateMe: (input: {
 			name?: string;
@@ -186,7 +207,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
 		readNotifications: (input: { ids?: number[]; ticket_id?: number } = {}) =>
 			request<null>('POST', '/notifications/read', input),
 
-		listArticles: (q?: string) => request<List<Article>>('GET', '/articles' + toQuery({ q })),
+		/** org: slug de la empresa; sin él, la del usuario (o la de la plataforma sin sesión). */
+		listArticles: (q?: string, org?: string) =>
+			request<List<Article>>('GET', '/articles' + toQuery({ q, org })),
 		getArticle: (id: number) => request<Article>('GET', `/articles/${id}`),
 		createArticle: (input: ArticleInput) => request<Article>('POST', '/articles', input),
 		updateArticle: (id: number, input: ArticleInput) =>
