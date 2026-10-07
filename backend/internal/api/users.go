@@ -22,6 +22,8 @@ type User struct {
 	// EmailNotifications: además de la campana, recibir avisos por correo.
 	EmailNotifications bool      `json:"email_notifications"`
 	CreatedAt          time.Time `json:"created_at"`
+	// Permanent: administrador que no se puede desactivar ni bajar de rol (ver permanent.go).
+	Permanent bool `json:"permanent"`
 }
 
 const userColumns = `id, name, email, role, active, email_notifications, created_at`
@@ -29,6 +31,7 @@ const userColumns = `id, name, email, role, active, email_notifications, created
 func scanUser(row pgx.Row) (User, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.EmailNotifications, &u.CreatedAt)
+	u.Permanent = isPermanentAdmin(u)
 	return u, err
 }
 
@@ -198,6 +201,13 @@ func (s *Server) updateUserRole(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "no puedes quitarte el rol de administrador")
 		return
 	}
+	if msg, err := s.permanentChange(r.Context(), claimsFrom(r).UserID(), id, &in.Role, nil, nil, nil); err != nil {
+		internalError(w, err)
+		return
+	} else if msg != "" {
+		writeError(w, http.StatusForbidden, msg)
+		return
+	}
 
 	u, err := scanUser(s.db.QueryRow(r.Context(),
 		`UPDATE users SET role = $2 WHERE id = $1 RETURNING `+userColumns, id, in.Role))
@@ -336,6 +346,13 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if errs.write(w) {
+		return
+	}
+	if msg, err := s.permanentChange(r.Context(), claimsFrom(r).UserID(), id, in.Role, in.Active, in.Email, in.Password); err != nil {
+		internalError(w, err)
+		return
+	} else if msg != "" {
+		writeError(w, http.StatusForbidden, msg)
 		return
 	}
 

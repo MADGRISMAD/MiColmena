@@ -231,6 +231,12 @@
 							{#if !u.active}
 								<span class="ml-1 rounded bg-muted px-1.5 text-xs font-normal">Desactivado</span>
 							{/if}
+							{#if u.permanent}
+								<span
+									class="ml-1 rounded bg-honey/25 px-1.5 text-xs font-normal"
+									title="No se puede desactivar ni cambiar de rol">Permanente</span
+								>
+							{/if}
 						</p>
 						<p
 							class="truncate text-xs text-muted-foreground"
@@ -242,7 +248,7 @@
 					<NativeSelect
 						size="sm"
 						value={u.role}
-						disabled={busy === u.id || u.id === $me?.id}
+						disabled={busy === u.id || u.id === $me?.id || u.permanent}
 						aria-label={`Rol de ${u.name}`}
 						onchange={(e) => {
 							const role = e.currentTarget.value as Role;
@@ -253,17 +259,18 @@
 							<NativeSelectOption value={role}>{roleLabels[role]}</NativeSelectOption>
 						{/each}
 					</NativeSelect>
+					<!-- La contraseña de un permanente solo la cambia otro permanente. -->
 					<Button
 						variant="ghost"
 						size="icon-sm"
-						disabled={busy === u.id}
+						disabled={busy === u.id || (u.permanent && u.id !== $me?.id && !$me?.permanent)}
 						onclick={() => resetPassword(u)}
 						aria-label={`Cambiar la contraseña de ${u.name}`}
 						title="Cambiar contraseña"
 					>
 						<KeyRoundIcon aria-hidden="true" />
 					</Button>
-					{#if u.id !== $me?.id}
+					{#if u.id !== $me?.id && !u.permanent}
 						<Button
 							variant="outline"
 							size="sm"

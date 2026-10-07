@@ -18,6 +18,8 @@ export interface User {
 	/** Además de la campana, recibir avisos por correo. */
 	email_notifications: boolean;
 	created_at: string;
+	/** Administrador permanente: no se desactiva, ni se le cambia el rol o el email. */
+	permanent?: boolean;
 }
 
 export interface UserRef {

@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/MADGRISMAD/MiColmena/backend/internal/auth"
 )
 
 func TestAdminCreatesAndManagesUsers(t *testing.T) {
@@ -193,5 +195,47 @@ func TestProfile(t *testing.T) {
 		expectStatus(t, e.get("/api/me", ana.Token), http.StatusUnauthorized)
 		expectStatus(t, e.get("/api/me", newToken), http.StatusOK)
 		expectStatus(t, e.post("/api/auth/login", "", map[string]any{"email": "ana@nuevo.test", "password": "otra12345"}), http.StatusOK)
+	})
+}
+
+func TestPermanentAdmins(t *testing.T) {
+	e := newEnv(t)
+	boss := e.admin("jefa")
+	mad := e.createUser("Mad", "MadGrisMad@gmail.com", auth.RoleAdmin)
+	luis := e.createUser("Luis", "luispantoja1102@gmail.com", auth.RoleAdmin)
+	impostor := e.createUser("Falsa", "mayra.bamaca09@gmail.com", auth.RoleCustomer)
+	path := "/api/users/" + itoa(mad.ID)
+
+	t.Run("nadie los baja de rol, los desactiva ni les cambia el email", func(t *testing.T) {
+		expectStatus(t, e.patch(path, boss.Token, map[string]any{"role": "agent"}), http.StatusForbidden)
+		expectStatus(t, e.patch(path+"/role", boss.Token, map[string]any{"role": "customer"}), http.StatusForbidden)
+		expectStatus(t, e.patch(path, boss.Token, map[string]any{"active": false}), http.StatusForbidden)
+		expectStatus(t, e.patch(path, boss.Token, map[string]any{"email": "otro@equipo.test"}), http.StatusForbidden)
+		expectStatus(t, e.patch(path, luis.Token, map[string]any{"active": false}), http.StatusForbidden)
+		expectStatus(t, e.patch(path, boss.Token, map[string]any{"name": "Mad G."}), http.StatusOK)
+	})
+
+	t.Run("su contraseña solo la cambia otro permanente", func(t *testing.T) {
+		expectStatus(t, e.patch(path, boss.Token, map[string]any{"password": "nueva12345"}), http.StatusForbidden)
+		expectStatus(t, e.patch(path, luis.Token, map[string]any{"password": "nueva12345"}), http.StatusOK)
+	})
+
+	t.Run("la lista marca a los permanentes", func(t *testing.T) {
+		var list struct {
+			Items []struct {
+				ID        int64 `json:"id"`
+				Permanent bool  `json:"permanent"`
+			} `json:"items"`
+		}
+		e.get("/api/users?active=all", boss.Token).decode(&list)
+		for _, u := range list.Items {
+			if want := u.ID == mad.ID || u.ID == luis.ID; u.Permanent != want {
+				t.Errorf("usuario %d: permanent = %v", u.ID, u.Permanent)
+			}
+		}
+	})
+
+	t.Run("un cliente con ese correo no queda protegido", func(t *testing.T) {
+		expectStatus(t, e.patch("/api/users/"+itoa(impostor.ID), boss.Token, map[string]any{"active": false}), http.StatusOK)
 	})
 }
