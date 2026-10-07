@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,19 +14,22 @@ import (
 
 // Lead es una solicitud de demo enviada desde la landing.
 type Lead struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Company   string    `json:"company"`
-	Email     string    `json:"email"`
-	Phone     string    `json:"phone"`
-	TeamSize  string    `json:"team_size"`
-	Plan      string    `json:"plan"`
-	Message   string    `json:"message"`
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	Company  string `json:"company"`
+	Email    string `json:"email"`
+	Phone    string `json:"phone"`
+	TeamSize string `json:"team_size"`
+	Plan     string `json:"plan"`
+	Message  string `json:"message"`
+	// Lo elegido en la calculadora de precios; 0 = no lo indicó.
+	Agents    int       `json:"agents"`
+	People    int       `json:"people"`
 	Handled   bool      `json:"handled"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-const leadColumns = `id, name, company, email, phone, team_size, plan, message, handled, created_at`
+const leadColumns = `id, name, company, email, phone, team_size, plan, message, agents, people, handled, created_at`
 
 var (
 	leadTeamSizes = []string{"", "1-3", "4-10", "11-25", "26+"}
@@ -43,6 +47,8 @@ func (s *Server) createLead(w http.ResponseWriter, r *http.Request) {
 		TeamSize string `json:"team_size"`
 		Plan     string `json:"plan"`
 		Message  string `json:"message"`
+		Agents   int    `json:"agents"`
+		People   int    `json:"people"`
 		// Campo trampa: invisible para personas; los bots lo rellenan.
 		Website string `json:"website"`
 	}
@@ -64,6 +70,8 @@ func (s *Server) createLead(w http.ResponseWriter, r *http.Request) {
 	errs.check(slices.Contains(leadTeamSizes, in.TeamSize), "team_size", "valor inválido")
 	errs.check(slices.Contains(leadPlans, in.Plan), "plan", "valor inválido")
 	errs.check(len(in.Message) <= 2000, "message", "es demasiado largo")
+	errs.check(in.Agents >= 0 && in.Agents <= 100_000, "agents", "valor inválido")
+	errs.check(in.People >= 0 && in.People <= 10_000_000, "people", "valor inválido")
 	if errs.write(w) {
 		return
 	}
@@ -82,16 +90,16 @@ func (s *Server) createLead(w http.ResponseWriter, r *http.Request) {
 
 	var id int64
 	if err := tx.QueryRow(r.Context(), `
-		INSERT INTO leads (name, company, email, phone, team_size, plan, message)
-		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-		in.Name, in.Company, in.Email, in.Phone, in.TeamSize, in.Plan, in.Message).Scan(&id); err != nil {
+		INSERT INTO leads (name, company, email, phone, team_size, plan, message, agents, people)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+		in.Name, in.Company, in.Email, in.Phone, in.TeamSize, in.Plan, in.Message, in.Agents, in.People).Scan(&id); err != nil {
 		internalError(w, err)
 		return
 	}
 
 	summary := fmt.Sprintf("%s (%s) pidió una demo", in.Name, in.Company)
-	body := fmt.Sprintf("Nueva solicitud de demo:\n\nNombre: %s\nEmpresa: %s\nEmail: %s\nTeléfono: %s\nAgentes: %s\nPlan: %s\n\n%s\n\nVer solicitudes: %s/admin/leads",
-		in.Name, in.Company, in.Email, orDash(in.Phone), orDash(in.TeamSize), orDash(in.Plan), in.Message, s.appURL)
+	body := fmt.Sprintf("Nueva solicitud de demo:\n\nNombre: %s\nEmpresa: %s\nEmail: %s\nTeléfono: %s\nAgentes: %s\nPersonas en la empresa: %s\n\n%s\n\nVer solicitudes: %s/admin/leads",
+		in.Name, in.Company, in.Email, orDash(in.Phone), countOrDash(in.Agents), countOrDash(in.People), in.Message, s.appURL)
 	if _, err := tx.Exec(r.Context(), `
 		INSERT INTO notifications (user_id, kind, summary)
 		SELECT id, 'lead', $1 FROM users WHERE role = 'admin' AND active`, excerpt(summary, 200)); err != nil {
@@ -127,6 +135,13 @@ func orDash(s string) string {
 		return "—"
 	}
 	return s
+}
+
+func countOrDash(n int) string {
+	if n == 0 {
+		return "—"
+	}
+	return strconv.Itoa(n)
 }
 
 func (s *Server) listLeads(w http.ResponseWriter, r *http.Request) {

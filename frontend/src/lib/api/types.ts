@@ -285,8 +285,9 @@ export interface LeadInput {
 	company: string;
 	email: string;
 	phone: string;
-	team_size: (typeof LEAD_TEAM_SIZES)[number] | '';
-	plan: LeadPlan | '';
+	/** Lo elegido en la calculadora de precios; 0 = no lo indicó. */
+	agents: number;
+	people: number;
 	message: string;
 	/** Campo trampa para bots: siempre vacío. */
 	website?: string;
@@ -294,6 +295,9 @@ export interface LeadInput {
 
 export interface Lead extends Omit<LeadInput, 'website'> {
 	id: number;
+	/** De solicitudes anteriores a la calculadora. */
+	team_size: (typeof LEAD_TEAM_SIZES)[number] | '';
+	plan: LeadPlan | '';
 	handled: boolean;
 	created_at: string;
 }

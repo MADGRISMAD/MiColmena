@@ -19,14 +19,15 @@
 	import TimerIcon from '@lucide/svelte/icons/timer';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import ZapIcon from '@lucide/svelte/icons/zap';
-	import type { LeadPlan, TicketPriority, TicketStatus } from '#lib/api/types.js';
+	import type { TicketPriority, TicketStatus } from '#lib/api/types.js';
 	import DemoForm from '#lib/components/demo-form.svelte';
 	import HexAvatar from '#lib/components/hex-avatar.svelte';
 	import Logo from '#lib/components/logo.svelte';
 	import PriorityBadge from '#lib/components/priority-badge.svelte';
 	import StatusBadge from '#lib/components/status-badge.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { ANNUAL_MONTHS_PAID, planPrice, plans } from '#lib/pricing.js';
+	import PricingCalculator from '#lib/components/pricing-calculator.svelte';
+	import { money, STARTING_PRICE } from '#lib/pricing.js';
 	import { isAuthenticated } from '#lib/stores/auth.js';
 	import { cn } from '#lib/utils.js';
 
@@ -35,7 +36,7 @@
 		{
 			icon: BadgeDollarSignIcon,
 			title: 'Precio en pesos',
-			text: 'Pagas en MXN por agente. Sin cobros en dólares ni sorpresas por el tipo de cambio.'
+			text: 'Pagas en MXN según tu equipo y el tamaño de tu empresa. Sin cobros en dólares ni sorpresas por el tipo de cambio.'
 		},
 		{
 			icon: LanguagesIcon,
@@ -145,12 +146,20 @@
 
 	const faqs = [
 		{
-			q: '¿Los precios son en pesos?',
-			a: 'Sí. Todos los precios están en pesos mexicanos (MXN) por agente al mes, más IVA. No dependen del tipo de cambio.'
+			q: '¿Cómo se calcula el precio?',
+			a: 'Con dos datos: cuántos agentes atienden tickets y cuántas personas tiene tu empresa. Hay una cuota según el tamaño de la empresa más un precio por cada agente, que baja a partir del sexto. Mueve la calculadora y verás el desglose.'
 		},
 		{
-			q: '¿Cobran por los clientes que abren tickets?',
-			a: 'No. Solo pagas por los agentes, las personas de tu equipo que atienden tickets. Tus clientes y el centro de ayuda no cuentan.'
+			q: '¿Los precios son en pesos?',
+			a: 'Sí. Todos los precios están en pesos mexicanos (MXN), más IVA. No dependen del tipo de cambio.'
+		},
+		{
+			q: '¿Cobran por ticket o por cada cliente que nos escribe?',
+			a: 'No. Puedes recibir los tickets que quieras y atender a todos tus clientes. El precio solo depende de tus agentes y del tamaño de tu empresa.'
+		},
+		{
+			q: '¿Hay planes con funciones recortadas?',
+			a: 'No. Todas las funciones vienen incluidas sin importar el tamaño: SLA, reportes, centro de ayuda, respuestas guardadas y lo demás.'
 		},
 		{
 			q: '¿Necesito instalar algo?',
@@ -159,10 +168,6 @@
 		{
 			q: '¿Puedo verlo antes de contratar?',
 			a: 'Sí. Llena el formulario de demo y te enseñamos MiColmena con casos parecidos a los de tu empresa.'
-		},
-		{
-			q: '¿Mis clientes necesitan crear una cuenta?',
-			a: 'Para abrir y seguir sus tickets, sí: se registran con su email en un minuto. El centro de ayuda se puede leer sin cuenta.'
 		}
 	];
 
@@ -230,14 +235,19 @@
 		'Encuestas de satisfacción'
 	];
 
+	// Lo elegido en la calculadora viaja con la solicitud de demo.
+	let agents = $state(5);
+	let people = $state(100);
 	let annual = $state(true);
-	let demoPlan = $state<LeadPlan | ''>('');
 	let openFaq = $state<number | null>(0);
 
-	function choosePlan(id: LeadPlan) {
-		demoPlan = id;
+	function goToDemo() {
 		document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' });
 		setTimeout(() => document.getElementById('lead-name')?.focus({ preventScroll: true }), 500);
+	}
+
+	function goToPricing() {
+		document.getElementById('precios')?.scrollIntoView({ behavior: 'smooth' });
 	}
 
 	// Las capas del hero siguen al mouse; con touch no hace falta.
@@ -258,7 +268,7 @@
 	<title>MiColmena · Mesa de ayuda en español con precios en pesos</title>
 	<meta
 		name="description"
-		content="Mesa de ayuda para empresas en México: tickets, SLA, centro de ayuda y reportes en español, con precios en pesos por agente. Solicita una demo."
+		content="Mesa de ayuda para empresas en México: tickets, SLA, centro de ayuda y reportes en español, con precios en pesos. Calcula tu precio y solicita una demo."
 	/>
 	<meta property="og:title" content="MiColmena · Mesa de ayuda en español con precios en pesos" />
 	<meta
@@ -376,7 +386,7 @@
 						class="enter mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground"
 						style="--delay: 1000ms"
 					>
-						{#each [`Desde ${planPrice(plans[0], false)} MXN por agente`, 'Sin pagar en dólares', 'Todo en español'] as point (point)}
+						{#each [`Desde ${money(STARTING_PRICE)} MXN al mes`, 'Sin pagar en dólares', 'Todo en español'] as point (point)}
 							<li class="flex items-center gap-1.5">
 								<CheckIcon class="size-4 text-amber-600" aria-hidden="true" />{point}
 							</li>
@@ -572,93 +582,15 @@
 			<!-- Precios -->
 			<section id="precios" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-24">
 				<div class="reveal mx-auto max-w-2xl text-center">
-					<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Precios claros, en pesos</h2>
+					<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Calcula tu precio, en pesos</h2>
 					<p class="mt-3 text-muted-foreground">
-						Pagas por cada agente de tu equipo. Tus clientes no cuentan.
+						Depende de dos cosas: cuántos agentes atienden tickets y qué tan grande es tu empresa.
+						Todas las funciones vienen incluidas.
 					</p>
-					<div
-						class="mt-8 inline-flex rounded-full border bg-muted p-1 text-sm"
-						role="group"
-						aria-label="Forma de pago"
-					>
-						{#each [{ value: false, label: 'Mensual' }, { value: true, label: 'Anual' }] as option (option.label)}
-							<button
-								type="button"
-								aria-pressed={annual === option.value}
-								onclick={() => (annual = option.value)}
-								class={cn(
-									'rounded-full px-4 py-1.5 font-medium text-muted-foreground transition-colors',
-									annual === option.value && 'bg-card text-foreground shadow-sm'
-								)}
-							>
-								{option.label}
-								{#if option.value}
-									<span
-										class="ml-1 rounded-full bg-honey/30 px-1.5 text-xs text-amber-900 dark:text-amber-200"
-									>
-										{12 - ANNUAL_MONTHS_PAID} meses gratis
-									</span>
-								{/if}
-							</button>
-						{/each}
-					</div>
 				</div>
-
-				<div class="mt-12 grid items-start gap-6 lg:grid-cols-3">
-					{#each plans as plan, i (plan.id)}
-						{@const price = planPrice(plan, annual)}
-						<div
-							class={cn(
-								'reveal relative flex h-full flex-col rounded-2xl border bg-card p-7 shadow-xs',
-								plan.highlighted && 'border-2 border-honey shadow-xl shadow-amber-900/10 lg:-mt-4'
-							)}
-							style="--i: {i}"
-						>
-							{#if plan.highlighted}
-								<span
-									class="absolute -top-3 left-7 rounded-full bg-honey px-3 py-0.5 text-xs font-semibold text-honey-foreground"
-								>
-									Recomendado
-								</span>
-							{/if}
-							<h3 class="text-lg font-semibold">{plan.name}</h3>
-							<p class="mt-1 min-h-10 text-sm text-muted-foreground">{plan.description}</p>
-							<div class="mt-5 flex items-end gap-1">
-								{#if price}
-									<span class="text-4xl font-bold tracking-tight tabular-nums">{price}</span>
-									<span class="pb-1 text-sm text-muted-foreground">MXN / agente / mes</span>
-								{:else}
-									<span class="text-4xl font-bold tracking-tight">A la medida</span>
-								{/if}
-							</div>
-							<p class="mt-1 text-xs text-muted-foreground">
-								{plan.agents} · {price
-									? annual
-										? 'pago anual, más IVA'
-										: 'pago mensual, más IVA'
-									: 'te enviamos una cotización'}
-							</p>
-							<Button
-								class="mt-6 w-full"
-								variant={plan.highlighted ? 'default' : 'outline'}
-								onclick={() => choosePlan(plan.id)}
-							>
-								{price ? 'Solicitar demo' : 'Cotizar'}
-							</Button>
-							<ul class="mt-6 grid gap-2.5 text-sm">
-								{#each plan.features as feature (feature)}
-									<li class="flex gap-2">
-										<CheckIcon class="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden="true" />
-										{feature}
-									</li>
-								{/each}
-							</ul>
-						</div>
-					{/each}
+				<div class="reveal mt-12" style="--i: 1">
+					<PricingCalculator bind:agents bind:people bind:annual onrequest={goToDemo} />
 				</div>
-				<p class="mt-8 text-center text-sm text-muted-foreground">
-					Precios en pesos mexicanos por agente al mes. IVA no incluido.
-				</p>
 			</section>
 
 			<!-- Preguntas frecuentes -->
@@ -715,7 +647,7 @@
 							Cuéntanos de tu equipo y te mostramos cómo MiColmena se adapta a tu forma de trabajar.
 						</p>
 						<ul class="mt-8 grid gap-3 text-sm">
-							{#each ['Demo con casos parecidos a los tuyos', 'Te ayudamos a elegir el plan', 'Precios en pesos, sin letras chiquitas'] as point (point)}
+							{#each ['Demo con casos parecidos a los tuyos', 'Te confirmamos el precio para tu equipo', 'Precios en pesos, sin letras chiquitas'] as point (point)}
 								<li class="flex items-center gap-2">
 									<span class="hex grid size-6 place-items-center bg-honey text-honey-foreground">
 										<CheckIcon class="size-3.5" aria-hidden="true" />
@@ -726,7 +658,7 @@
 						</ul>
 					</div>
 					<div class="relative rounded-2xl bg-card p-6 text-card-foreground shadow-2xl sm:p-8">
-						<DemoForm bind:plan={demoPlan} />
+						<DemoForm {agents} {people} {annual} onadjust={goToPricing} />
 					</div>
 				</div>
 			</section>

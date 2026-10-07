@@ -10,7 +10,7 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { formatDateTime, formatRelative } from '#lib/format.js';
 	import { onLive } from '#lib/live/index.js';
-	import { plans } from '#lib/pricing.js';
+	import { estimate, MAX_AGENTS, money, peopleLabel } from '#lib/pricing.js';
 	import { cn } from '#lib/utils.js';
 
 	let leads = $state<Lead[] | null>(null);
@@ -36,7 +36,11 @@
 		}
 	}
 
-	const planName = (id: string) => plans.find((p) => p.id === id)?.name ?? '';
+	// El precio se recalcula con la fórmula actual; no se guarda lo que vio la persona.
+	function quote(lead: Lead): string {
+		const e = estimate(lead.agents, lead.people);
+		return e.custom ? 'Cotización a la medida' : `${money(e.monthly)} al mes (pago mensual)`;
+	}
 	const pending = $derived(leads?.filter((l) => !l.handled).length ?? 0);
 </script>
 
@@ -64,12 +68,12 @@
 						<div class="min-w-0 flex-1">
 							<p class="flex flex-wrap items-center gap-2 font-semibold">
 								{lead.company}
-								{#if lead.plan}
+								{#if lead.agents > 0}
 									<span class="rounded bg-honey/20 px-1.5 text-xs font-medium">
-										Plan {planName(lead.plan)}
+										{lead.agents > MAX_AGENTS ? `Más de ${MAX_AGENTS}` : lead.agents} agentes ·
+										{peopleLabel(lead.people).toLowerCase()} personas · {quote(lead)}
 									</span>
-								{/if}
-								{#if lead.team_size}
+								{:else if lead.team_size}
 									<span class="rounded bg-muted px-1.5 text-xs font-normal text-muted-foreground">
 										{lead.team_size} agentes
 									</span>

@@ -1,24 +1,36 @@
 <script lang="ts">
 	import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
-	import { api, ApiError, LEAD_TEAM_SIZES, type LeadInput, type LeadPlan } from '#lib/api/index.js';
+	import { api, ApiError, type LeadInput } from '#lib/api/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
-	import { plans } from '#lib/pricing.js';
+	import { estimate, MAX_AGENTS, money, peopleLabel } from '#lib/pricing.js';
 
-	let { plan = $bindable('') }: { plan?: LeadPlan | '' } = $props();
+	let {
+		agents,
+		people,
+		annual,
+		onadjust
+	}: {
+		/** Lo elegido en la calculadora de precios. */
+		agents: number;
+		people: number;
+		annual: boolean;
+		/** Volver a la calculadora para cambiarlo. */
+		onadjust: () => void;
+	} = $props();
 
-	let draft = $state<Omit<LeadInput, 'plan'>>({
+	let draft = $state<Omit<LeadInput, 'agents' | 'people'>>({
 		name: '',
 		company: '',
 		email: '',
 		phone: '',
-		team_size: '',
 		message: '',
 		website: ''
 	});
+
+	const quote = $derived(estimate(agents, people));
 	let errors = $state<Record<string, string>>({});
 	let sending = $state(false);
 	let sent = $state(false);
@@ -37,7 +49,7 @@
 		if (Object.keys(errors).length) return;
 		sending = true;
 		try {
-			await api.createLead({ ...draft, plan });
+			await api.createLead({ ...draft, agents, people });
 			sent = true;
 		} catch (err) {
 			errors =
@@ -62,6 +74,27 @@
 	</div>
 {:else}
 	<form class="grid gap-4 sm:grid-cols-2" onsubmit={submit} novalidate>
+		<div
+			class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-honey/50 bg-honey/10 px-4 py-3 text-sm sm:col-span-2"
+		>
+			<p data-testid="quote">
+				<strong>{agents > MAX_AGENTS ? `Más de ${MAX_AGENTS}` : agents}</strong>
+				{agents === 1 ? 'agente' : 'agentes'} · <strong>{peopleLabel(people).toLowerCase()}</strong>
+				personas ·
+				<strong>
+					{quote.custom
+						? 'cotización a la medida'
+						: `${money(annual ? quote.monthlyAnnual : quote.monthly)} al mes`}
+				</strong>
+			</p>
+			<button
+				type="button"
+				class="font-medium text-primary underline dark:text-honey"
+				onclick={onadjust}
+			>
+				Cambiar
+			</button>
+		</div>
 		<div class="grid gap-1.5">
 			<Label for="lead-name">Nombre</Label>
 			<Input
@@ -107,24 +140,6 @@
 				Teléfono o WhatsApp <span class="font-normal text-muted-foreground">(opcional)</span>
 			</Label>
 			<Input id="lead-phone" type="tel" autocomplete="tel" bind:value={draft.phone} />
-		</div>
-		<div class="grid gap-1.5">
-			<Label for="lead-team">¿Cuántas personas atenderán tickets?</Label>
-			<NativeSelect id="lead-team" class="w-full" bind:value={draft.team_size}>
-				<NativeSelectOption value="">Elige una opción</NativeSelectOption>
-				{#each LEAD_TEAM_SIZES as size (size)}
-					<NativeSelectOption value={size}>{size} agentes</NativeSelectOption>
-				{/each}
-			</NativeSelect>
-		</div>
-		<div class="grid gap-1.5">
-			<Label for="lead-plan">Plan que te interesa</Label>
-			<NativeSelect id="lead-plan" class="w-full" bind:value={plan}>
-				<NativeSelectOption value="">Aún no lo sé</NativeSelectOption>
-				{#each plans as p (p.id)}
-					<NativeSelectOption value={p.id}>{p.name}</NativeSelectOption>
-				{/each}
-			</NativeSelect>
 		</div>
 		<div class="grid gap-1.5 sm:col-span-2">
 			<Label for="lead-message">

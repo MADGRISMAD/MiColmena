@@ -135,8 +135,8 @@ Los clientes solo ven sus propios tickets.
 
 ## Página principal y ventas
 
-- Los **planes y precios** (en pesos, por agente al mes, más IVA) están en `frontend/src/lib/pricing.ts`. Cambia ahí precios, límites o lo que incluye cada plan; la landing, el formulario de demo y el panel de solicitudes los leen de ese archivo.
-- El formulario **Solicitar demo** guarda la solicitud (`POST /api/leads`, con límite por IP y un campo trampa contra bots) y avisa a los administradores en la campana y por correo. Se gestionan en *Administración → Solicitudes de demo*.
+- **Precio = cuota según cuántas personas tiene la empresa + precio por cada agente** (más barato a partir del sexto), en pesos y más IVA, con 2 meses gratis en pago anual. Todas las funciones van incluidas. La landing tiene una calculadora con dos sliders (agentes y personas). Los montos se cambian en `frontend/src/lib/pricing.ts`; la calculadora, el formulario de demo y el panel de solicitudes los leen de ahí.
+- El formulario **Solicitar demo** guarda la solicitud con los agentes y personas elegidos en la calculadora (`POST /api/leads`, con límite por IP y un campo trampa contra bots) y avisa a los administradores en la campana y por correo. Se gestionan en *Administración → Solicitudes de demo*.
 
 ## Correo y adjuntos
 

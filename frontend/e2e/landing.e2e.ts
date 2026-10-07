@@ -8,27 +8,53 @@ test.beforeEach(async ({ page }) => {
 	await api.install(page);
 });
 
-test('los precios están en pesos y el pago anual aplica el descuento', async ({ page }) => {
+test('la calculadora cambia el precio con los agentes y el tamaño de la empresa', async ({
+	page
+}) => {
 	await page.goto('/');
 	const pricing = page.locator('#precios');
+	const total = pricing.getByTestId('total');
 	await pricing.scrollIntoViewIfNeeded();
 
-	await expect(pricing.getByRole('button', { name: /Anual/ })).toHaveAttribute(
-		'aria-pressed',
-		'true'
-	);
-	await expect(pricing.getByText('$208', { exact: true })).toBeVisible();
+	// Por defecto: 5 agentes, hasta 100 personas, pago anual (10 de 12 meses).
+	await expect(total).toHaveText('$1,203');
 	await pricing.getByRole('button', { name: 'Mensual' }).click();
-	await expect(pricing.getByText('$249', { exact: true })).toBeVisible();
-	await expect(pricing.getByText('A la medida', { exact: true })).toBeVisible();
+	await expect(total).toHaveText('$1,444');
+
+	// 8 agentes: 5 a $149 y 3 a $129, más la cuota de la empresa.
+	await pricing.getByLabel(/^Agentes/).fill('8');
+	await expect(total).toHaveText('$1,831');
+	await expect(pricing.getByText('3 agentes × $129')).toBeVisible();
+
+	// La misma gente en una empresa más grande cuesta más.
+	await pricing.getByLabel(/^Personas en tu empresa/).fill('7');
+	await expect(pricing.getByText('Hasta 1,000', { exact: true })).toBeVisible();
+	await expect(total).toHaveText('$4,131');
+
+	// Fuera de la calculadora se cotiza.
+	await pricing.getByLabel(/^Personas en tu empresa/).fill('8');
+	await expect(pricing.getByText('A la medida')).toBeVisible();
+	await expect(pricing.getByRole('button', { name: 'Pedir cotización' })).toBeVisible();
 });
 
-test('elegir un plan abre el formulario de demo con ese plan y se envía', async ({ page }) => {
+test('los agentes nunca superan a las personas de la empresa', async ({ page }) => {
 	await page.goto('/');
-	await page.locator('#precios').getByRole('button', { name: 'Solicitar demo' }).nth(1).click();
+	const pricing = page.locator('#precios');
+	await pricing.getByLabel(/^Personas en tu empresa/).fill('0'); // hasta 5 personas
+	await expect(pricing.getByLabel(/^Agentes/)).toHaveValue('5');
+	await pricing.getByLabel(/^Agentes/).fill('20');
+	await expect(pricing.getByText('Hasta 25', { exact: true })).toBeVisible();
+});
+
+test('la demo se pide con el precio calculado', async ({ page }) => {
+	await page.goto('/');
+	const pricing = page.locator('#precios');
+	await pricing.getByLabel(/^Agentes/).fill('8');
+	await pricing.getByRole('button', { name: 'Solicitar demo con este precio' }).click();
 
 	const form = page.locator('#demo');
-	await expect(form.getByLabel('Plan que te interesa')).toHaveValue('profesional');
+	await expect(form.getByTestId('quote')).toContainText('8 agentes');
+	await expect(form.getByTestId('quote')).toContainText('hasta 100 personas');
 
 	await form.getByRole('button', { name: 'Solicitar mi demo' }).click();
 	await expect(form.getByText('Escribe tu nombre')).toBeVisible();
@@ -37,7 +63,6 @@ test('elegir un plan abre el formulario de demo con ese plan y se envía', async
 	await form.getByLabel('Nombre').fill('Rosa Méndez');
 	await form.getByLabel('Empresa').fill('Ferretería López');
 	await form.getByLabel('Email de trabajo').fill('rosa@ferreteria.mx');
-	await form.getByLabel('¿Cuántas personas atenderán tickets?').selectOption('4-10');
 	await form.getByRole('button', { name: 'Solicitar mi demo' }).click();
 
 	await expect(form.getByText('¡Gracias, Rosa!')).toBeVisible();
@@ -45,22 +70,21 @@ test('elegir un plan abre el formulario de demo con ese plan y se envía', async
 		name: 'Rosa Méndez',
 		company: 'Ferretería López',
 		email: 'rosa@ferreteria.mx',
-		team_size: '4-10',
-		plan: 'profesional',
+		agents: 8,
+		people: 100,
 		website: ''
 	});
 });
 
 test('las preguntas frecuentes se abren y cierran', async ({ page }) => {
 	await page.goto('/');
-	const question = page.getByRole('button', {
-		name: '¿Cobran por los clientes que abren tickets?'
-	});
+	const question = page.getByRole('button', { name: /¿Cobran por ticket/ });
+	const answer = page.getByText('Puedes recibir los tickets que quieras');
 	await question.click();
 	await expect(question).toHaveAttribute('aria-expanded', 'true');
-	await expect(page.getByText('Solo pagas por los agentes')).toBeVisible();
+	await expect(answer).toBeVisible();
 	await question.click();
-	await expect(page.getByText('Solo pagas por los agentes')).toBeHidden();
+	await expect(answer).toBeHidden();
 });
 
 test.describe('en el móvil', () => {
