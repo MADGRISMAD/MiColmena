@@ -1,4 +1,12 @@
-import type { Role, TicketEvent, TicketPriority, TicketStatus } from '#lib/api/types.js';
+import type {
+	AssetCategory,
+	AssetEvent,
+	AssetState,
+	Role,
+	TicketEvent,
+	TicketPriority,
+	TicketStatus
+} from '#lib/api/types.js';
 
 export const statusLabels: Record<TicketStatus, string> = {
 	open: 'Abierto',
@@ -93,4 +101,89 @@ export function describeEvent(e: Pick<TicketEvent, 'kind' | 'old_value' | 'new_v
 		default:
 			return 'hizo un cambio';
 	}
+}
+
+// --- Activos ---
+
+export const assetCategoryLabels: Record<AssetCategory, string> = {
+	computer: 'Computadora',
+	phone: 'Teléfono',
+	monitor: 'Monitor',
+	network: 'Red',
+	peripheral: 'Periférico',
+	software: 'Software',
+	other: 'Otro'
+};
+
+export const assetStateLabels: Record<AssetState, string> = {
+	in_stock: 'En almacén',
+	in_use: 'En uso',
+	in_repair: 'En reparación',
+	retired: 'Retirado'
+};
+
+/** Nombre de cada campo editable, tal como llega en el evento 'updated' del equipo. */
+export const assetFieldLabels: Record<string, string> = {
+	tag: 'etiqueta',
+	name: 'nombre',
+	category: 'categoría',
+	model: 'modelo',
+	serial: 'serie',
+	purchase_date: 'fecha de compra',
+	warranty_until: 'garantía',
+	purchase_cost: 'costo',
+	notes: 'notas'
+};
+
+const isAssetState = (v: string): v is AssetState => v in assetStateLabels;
+
+/** Texto de un evento del historial de un equipo: "Estado: En almacén → En uso". */
+export function describeAssetEvent(
+	e: Pick<AssetEvent, 'kind' | 'old_value' | 'new_value'>
+): string {
+	const state = (v: string) => (isAssetState(v) ? assetStateLabels[v] : v);
+	switch (e.kind) {
+		case 'created':
+			return 'Se dio de alta el equipo';
+		case 'state':
+			return `Estado: ${state(e.old_value)} → ${state(e.new_value)}`;
+		case 'assigned':
+			return e.new_value
+				? `Asignado a ${e.new_value}`
+				: `Se quitó el responsable${e.old_value ? ` (era ${e.old_value})` : ''}`;
+		case 'location':
+			return e.new_value
+				? `Ubicación: ${e.old_value || 'sin ubicación'} → ${e.new_value}`
+				: `Se quitó la ubicación (era ${e.old_value})`;
+		case 'updated': {
+			const fields = e.new_value
+				.split(',')
+				.map((f) => assetFieldLabels[f.trim()] ?? f.trim())
+				.filter(Boolean);
+			return `Se actualizaron: ${fields.join(', ')}`;
+		}
+		case 'ticket':
+			return `Vinculado al ticket ${e.new_value || e.old_value}`;
+		default:
+			return 'Se hizo un cambio';
+	}
+}
+
+/** Estado de la garantía: vencida, por vencer (60 días) o vigente. null si no hay fecha. */
+export function warrantyStatus(
+	warrantyUntil: string | null,
+	now: Date = new Date()
+): 'expired' | 'expiring' | 'ok' | null {
+	if (!warrantyUntil) return null;
+	const today = now.toISOString().slice(0, 10);
+	if (warrantyUntil < today) return 'expired';
+	const soon = new Date(now.getTime() + 60 * 86_400_000).toISOString().slice(0, 10);
+	return warrantyUntil <= soon ? 'expiring' : 'ok';
+}
+
+/** "2024-01-10" -> "10 ene 2024" (sin pasar por zonas horarias). */
+export function formatDate(date: string | null): string {
+	if (!date) return '—';
+	const [y, m, d] = date.split('-').map(Number);
+	return new Intl.DateTimeFormat('es', { dateStyle: 'medium' }).format(new Date(y, m - 1, d));
 }

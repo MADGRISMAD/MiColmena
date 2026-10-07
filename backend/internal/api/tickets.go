@@ -48,6 +48,10 @@ type Ticket struct {
 	UpdatedAt    time.Time       `json:"updated_at"`
 	ResolvedAt   *time.Time      `json:"resolved_at"`
 
+	// Kind es "incident" (algo falló) o "request" (se pidió algo del catálogo de servicios).
+	Kind        string      `json:"kind"`
+	CatalogItem *CatalogRef `json:"catalog_item"`
+
 	// SLA: plazos calculados desde la creación según la prioridad actual.
 	FirstResponseAt  *time.Time `json:"first_response_at"`
 	FirstResponseDue time.Time  `json:"first_response_due"`
@@ -70,10 +74,12 @@ const ticketSelect = `
 	       t.first_response_at,
 	       t.created_at + p.first_response_minutes * interval '1 minute',
 	       t.created_at + p.resolution_minutes * interval '1 minute',
-	       t.satisfaction, t.satisfaction_comment, t.rated_at, t.org_id
+	       t.satisfaction, t.satisfaction_comment, t.rated_at, t.org_id,
+	       t.kind, si.id, si.name
 	FROM tickets t
 	JOIN users r ON r.id = t.requester_id
 	LEFT JOIN users a ON a.id = t.assignee_id
+	LEFT JOIN service_items si ON si.id = t.catalog_item_id
 	JOIN sla_policies p ON p.org_id = t.org_id AND p.priority = t.priority`
 
 // slaBreached es la condición SQL de un ticket pendiente que ya superó alguno de sus plazos.
@@ -84,14 +90,19 @@ const slaBreached = `(t.status NOT IN ('resolved', 'closed') AND (
 func scanTicket(row pgx.Row) (Ticket, error) {
 	var t Ticket
 	var assigneeID *int64
-	var assigneeName *string
+	var assigneeName, itemName *string
+	var itemID *int64
 	err := row.Scan(&t.ID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.Category,
 		&t.Requester.ID, &t.Requester.Name, &assigneeID, &assigneeName, &t.Tags,
 		&t.CustomFields, &t.CreatedAt, &t.UpdatedAt, &t.ResolvedAt,
 		&t.FirstResponseAt, &t.FirstResponseDue, &t.ResolutionDue,
-		&t.Satisfaction, &t.SatisfactionComment, &t.RatedAt, &t.OrgID)
+		&t.Satisfaction, &t.SatisfactionComment, &t.RatedAt, &t.OrgID,
+		&t.Kind, &itemID, &itemName)
 	if assigneeID != nil {
 		t.Assignee = &UserRef{ID: *assigneeID, Name: *assigneeName}
+	}
+	if itemID != nil {
+		t.CatalogItem = &CatalogRef{ID: *itemID, Name: *itemName}
 	}
 	return t, err
 }
@@ -145,6 +156,22 @@ func (s *Server) listTickets(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		where = append(where, "t.assignee_id = "+arg(id))
+	}
+	switch v := q.Get("kind"); v {
+	case "":
+	case "incident", "request":
+		where = append(where, "t.kind = "+arg(v))
+	default:
+		writeError(w, http.StatusBadRequest, "kind inválido")
+		return
+	}
+	if v := q.Get("asset"); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "asset inválido")
+			return
+		}
+		where = append(where, "EXISTS (SELECT 1 FROM ticket_assets ta WHERE ta.ticket_id = t.id AND ta.asset_id = "+arg(id)+")")
 	}
 	switch q.Get("sla") {
 	case "":
@@ -246,6 +273,8 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 		CustomFields json.RawMessage `json:"custom_fields"`
 		// Solo agentes y administradores pueden abrir tickets en nombre de otro usuario.
 		RequesterID *int64 `json:"requester_id"`
+		// Equipo del que trata el ticket (un cliente solo puede elegir los suyos).
+		AssetID *int64 `json:"asset_id"`
 	}
 	if !decodeJSON(w, r, &in) {
 		return
@@ -292,6 +321,18 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if in.AssetID != nil {
+		ok, err := s.assetUsable(r.Context(), claims, requester, *in.AssetID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		if !ok {
+			validationErrors{"asset_id": "el equipo no existe"}.write(w)
+			return
+		}
+	}
+
 	tx, err := s.db.Begin(r.Context())
 	if err != nil {
 		internalError(w, err)
@@ -299,29 +340,12 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
-	var id int64
-	err = tx.QueryRow(r.Context(), `
-		INSERT INTO tickets (title, description, priority, category, custom_fields, requester_id, org_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id`,
-		in.Title, in.Description, in.Priority, *category, in.CustomFields, requester, claims.OrgID,
-	).Scan(&id)
+	t, out, err := s.insertTicket(r.Context(), tx, newTicket{
+		Title: in.Title, Description: in.Description, Priority: in.Priority, Category: *category,
+		CustomFields: in.CustomFields, Kind: "incident", RequesterID: requester, ActorID: claims.UserID(),
+		OrgID: claims.OrgID, AssetID: in.AssetID,
+	})
 	if err != nil {
-		internalError(w, err)
-		return
-	}
-	if err := addEvent(r.Context(), tx, id, claims.UserID(), "created", "", ""); err != nil {
-		internalError(w, err)
-		return
-	}
-	t, err := fetchTicket(r.Context(), tx, id)
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	var out fanout
-	out.ticket(t, false)
-	if err := s.notifyNewTicket(r.Context(), tx, &out, claims.UserID(), t); err != nil {
 		internalError(w, err)
 		return
 	}
@@ -331,6 +355,52 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 	}
 	s.broker.publish(out)
 	writeJSON(w, http.StatusCreated, t)
+}
+
+// newTicket son los datos para crear un ticket, venga de un formulario libre o del catálogo.
+type newTicket struct {
+	Title, Description, Priority, Category, Kind string
+	CustomFields                                 json.RawMessage
+	CatalogItemID                                *int64
+	AssetID                                      *int64
+	RequesterID, ActorID, OrgID                  int64
+}
+
+// insertTicket crea el ticket con su historial, el activo vinculado y los avisos a los agentes.
+// El llamador confirma la transacción y publica lo que devuelve.
+func (s *Server) insertTicket(ctx context.Context, tx pgx.Tx, in newTicket) (Ticket, fanout, error) {
+	var out fanout
+	var id int64
+	err := tx.QueryRow(ctx, `
+		INSERT INTO tickets (title, description, priority, category, custom_fields, requester_id, org_id, kind, catalog_item_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING id`,
+		in.Title, in.Description, in.Priority, in.Category, in.CustomFields, in.RequesterID, in.OrgID,
+		in.Kind, in.CatalogItemID,
+	).Scan(&id)
+	if err != nil {
+		return Ticket{}, out, err
+	}
+	if err := addEvent(ctx, tx, id, in.ActorID, "created", "", ""); err != nil {
+		return Ticket{}, out, err
+	}
+	if in.AssetID != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO ticket_assets (ticket_id, asset_id) VALUES ($1, $2)`, id, *in.AssetID); err != nil {
+			return Ticket{}, out, err
+		}
+		if err := addAssetEvent(ctx, tx, *in.AssetID, in.ActorID, "ticket", "", "#"+strconv.FormatInt(id, 10)); err != nil {
+			return Ticket{}, out, err
+		}
+	}
+	t, err := fetchTicket(ctx, tx, id)
+	if err != nil {
+		return Ticket{}, out, err
+	}
+	out.ticket(t, false)
+	if err := s.notifyNewTicket(ctx, tx, &out, in.ActorID, t); err != nil {
+		return Ticket{}, out, err
+	}
+	return t, out, nil
 }
 
 // ticketPatch son los cambios de un PATCH. Solo se aplican los campos enviados.

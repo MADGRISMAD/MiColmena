@@ -4,6 +4,8 @@
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
 	import ChevronsUpIcon from '@lucide/svelte/icons/chevrons-up';
 	import InboxIcon from '@lucide/svelte/icons/inbox';
+	import ListChecksIcon from '@lucide/svelte/icons/list-checks';
+	import UserRoundCheckIcon from '@lucide/svelte/icons/user-round-check';
 	import SirenIcon from '@lucide/svelte/icons/siren';
 	import SmileIcon from '@lucide/svelte/icons/smile';
 	import TimerIcon from '@lucide/svelte/icons/timer';
@@ -96,10 +98,16 @@
 	value: string | number,
 	Icon: typeof InboxIcon,
 	href: string | null,
-	tone: string
+	tone: string,
+	band = 'border-t-transparent'
 )}
+	<!-- Cada cola lleva una franja de color arriba, como un tablero de colas: se lee de lejos. -->
 	<Card.Root
-		class={cn('relative gap-0 overflow-hidden py-5', href && 'transition-shadow hover:shadow-md')}
+		class={cn(
+			'relative gap-0 overflow-hidden border-t-4 py-5',
+			band,
+			href && 'transition-shadow hover:shadow-md'
+		)}
 	>
 		<Card.Content class="flex-row items-start justify-between gap-3 px-5">
 			<div>
@@ -135,34 +143,54 @@
 		<Skeleton class="h-64 rounded-xl" />
 	</div>
 {:else}
-	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 		{@render kpi(
 			'Tickets sin resolver',
 			unresolved,
 			InboxIcon,
 			resolve('/(app)/tickets'),
-			'bg-honey text-honey-foreground'
+			'bg-honey text-honey-foreground',
+			'border-t-amber-500'
+		)}
+		{@render kpi(
+			'Asignados a mí',
+			stats.mine_open,
+			UserRoundCheckIcon,
+			resolve('/(app)/tickets?assignee=me'),
+			'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300',
+			'border-t-sky-500'
 		)}
 		{@render kpi(
 			'Sin asignar',
 			stats.unassigned_open,
 			UserRoundXIcon,
 			resolve('/(app)/tickets?assignee=none'),
-			'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300'
+			'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
+			'border-t-violet-500'
+		)}
+		{@render kpi(
+			'Solicitudes del catálogo',
+			stats.requests_open,
+			ListChecksIcon,
+			resolve('/(app)/tickets?kind=request'),
+			'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
+			'border-t-emerald-500'
 		)}
 		{@render kpi(
 			'Urgentes abiertos',
 			stats.open_by_priority.urgent,
 			ChevronsUpIcon,
 			resolve('/(app)/tickets?priority=urgent'),
-			'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
+			'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300',
+			'border-t-orange-500'
 		)}
 		{@render kpi(
 			'SLA vencido',
 			stats.sla_breached,
 			SirenIcon,
 			resolve('/(app)/tickets?sla=breached'),
-			stats.sla_breached > 0 ? 'bg-red-600 text-white' : 'bg-muted text-muted-foreground'
+			stats.sla_breached > 0 ? 'bg-red-600 text-white' : 'bg-muted text-muted-foreground',
+			'border-t-red-600'
 		)}
 		{@render kpi(
 			'Satisfacción (30 días)',

@@ -159,6 +159,26 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/macros/{id}", s.staffOnly(s.deleteMacro))
 	mux.Handle("GET /api/stats", s.staffOnly(s.stats))
 
+	mux.Handle("GET /api/catalog", s.authed(s.getCatalog))
+	mux.Handle("POST /api/catalog/items/{id}/request", s.authed(s.requestService))
+	mux.Handle("POST /api/catalog/categories", s.adminOnly(s.createServiceCategory))
+	mux.Handle("PATCH /api/catalog/categories/{id}", s.adminOnly(s.updateServiceCategory))
+	mux.Handle("DELETE /api/catalog/categories/{id}", s.adminOnly(s.deleteServiceCategory))
+	mux.Handle("POST /api/catalog/items", s.adminOnly(s.createServiceItem))
+	mux.Handle("PATCH /api/catalog/items/{id}", s.adminOnly(s.updateServiceItem))
+	mux.Handle("DELETE /api/catalog/items/{id}", s.adminOnly(s.deleteServiceItem))
+
+	mux.Handle("GET /api/assets", s.staffOnly(s.listAssets))
+	mux.Handle("POST /api/assets", s.staffOnly(s.createAsset))
+	mux.Handle("GET /api/assets/summary", s.staffOnly(s.assetsSummary))
+	mux.Handle("GET /api/assets/mine", s.authed(s.myAssets))
+	mux.Handle("GET /api/assets/{id}", s.staffOnly(s.getAsset))
+	mux.Handle("PATCH /api/assets/{id}", s.staffOnly(s.updateAsset))
+	mux.Handle("DELETE /api/assets/{id}", s.adminOnly(s.deleteAsset))
+	mux.Handle("GET /api/tickets/{id}/assets", s.staffOnly(s.listTicketAssets))
+	mux.Handle("POST /api/tickets/{id}/assets", s.staffOnly(s.linkTicketAsset))
+	mux.Handle("DELETE /api/tickets/{id}/assets/{assetId}", s.staffOnly(s.unlinkTicketAsset))
+
 	return s.recoverer(s.logger(s.cors(mux)))
 }
 

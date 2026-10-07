@@ -1,4 +1,9 @@
-import { TICKET_PRIORITIES, TICKET_STATUSES, type TicketFilters } from '#lib/api/types.js';
+import {
+	TICKET_KINDS,
+	TICKET_PRIORITIES,
+	TICKET_STATUSES,
+	type TicketFilters
+} from '#lib/api/types.js';
 
 /** Lee los filtros de la URL descartando valores inválidos, para no enviar basura a la API. */
 export function parseTicketFilters(params: Pick<URLSearchParams, 'get'>): TicketFilters {
@@ -25,6 +30,14 @@ export function parseTicketFilters(params: Pick<URLSearchParams, 'get'>): Ticket
 	if (tag) filters.tag = tag;
 
 	if (params.get('sla') === 'breached') filters.sla = 'breached';
+
+	const kind = params.get('kind');
+	if (kind && (TICKET_KINDS as readonly string[]).includes(kind)) {
+		filters.kind = kind as TicketFilters['kind'];
+	}
+
+	const asset = params.get('asset');
+	if (asset && /^\d+$/.test(asset)) filters.asset = Number(asset);
 
 	const q = params.get('q')?.trim();
 	if (q) filters.q = q;

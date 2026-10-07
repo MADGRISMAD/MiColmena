@@ -202,10 +202,12 @@ func seedOrg(ctx context.Context, q querier, orgID int64) error {
 		orgID); err != nil {
 		return err
 	}
-	_, err := q.Exec(ctx, `
+	if _, err := q.Exec(ctx, `
 		INSERT INTO categories (org_id, name)
-		SELECT $1, unnest(ARRAY['Dudas generales', 'Problemas técnicos', 'Facturación'])`, orgID)
-	return err
+		SELECT $1, unnest(ARRAY['Dudas generales', 'Problemas técnicos', 'Facturación'])`, orgID); err != nil {
+		return err
+	}
+	return seedCatalog(ctx, q, orgID)
 }
 
 // getPortal da los datos públicos de una empresa para su portal de soporte.

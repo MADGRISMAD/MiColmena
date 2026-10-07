@@ -1,6 +1,11 @@
 import type {
 	Article,
 	ArticleInput,
+	Asset,
+	AssetDetail,
+	AssetFilters,
+	AssetInput,
+	AssetSummary,
 	Attachment,
 	AuthResponse,
 	BulkUpdateInput,
@@ -24,6 +29,11 @@ import type {
 	ReportRange,
 	Role,
 	Satisfaction,
+	ServiceCategory,
+	ServiceCategoryInput,
+	ServiceItem,
+	ServiceItemInput,
+	ServiceRequestInput,
 	SavedView,
 	SlaPolicy,
 	Stats,
@@ -186,6 +196,41 @@ export function createApiClient(options: ApiClientOptions = {}) {
 		setUserRole: (id: number, role: Role) => request<User>('PATCH', `/users/${id}/role`, { role }),
 
 		stats: () => request<Stats>('GET', '/stats'),
+
+		/** Catálogo de servicios. Con all, un administrador ve también los servicios inactivos. */
+		getCatalog: (all = false) =>
+			request<{ categories: ServiceCategory[] }>(
+				'GET',
+				'/catalog' + toQuery({ all: all ? 1 : undefined })
+			),
+		requestService: (itemId: number, input: ServiceRequestInput) =>
+			request<Ticket>('POST', `/catalog/items/${itemId}/request`, input),
+		createServiceCategory: (input: ServiceCategoryInput) =>
+			request<ServiceCategory>('POST', '/catalog/categories', input),
+		updateServiceCategory: (id: number, input: ServiceCategoryInput) =>
+			request<ServiceCategory>('PATCH', `/catalog/categories/${id}`, input),
+		deleteServiceCategory: (id: number) => request<null>('DELETE', `/catalog/categories/${id}`),
+		createServiceItem: (input: ServiceItemInput) =>
+			request<ServiceItem>('POST', '/catalog/items', input),
+		updateServiceItem: (id: number, input: ServiceItemInput) =>
+			request<ServiceItem>('PATCH', `/catalog/items/${id}`, input),
+		deleteServiceItem: (id: number) => request<null>('DELETE', `/catalog/items/${id}`),
+
+		/** Activos (equipos). */
+		listAssets: (filters: AssetFilters = {}) =>
+			request<Page<Asset>>('GET', '/assets' + toQuery({ ...filters })),
+		assetsSummary: () => request<AssetSummary>('GET', '/assets/summary'),
+		myAssets: () => request<List<Asset>>('GET', '/assets/mine'),
+		getAsset: (id: number) => request<AssetDetail>('GET', `/assets/${id}`),
+		createAsset: (input: AssetInput) => request<Asset>('POST', '/assets', input),
+		updateAsset: (id: number, input: AssetInput) => request<Asset>('PATCH', `/assets/${id}`, input),
+		deleteAsset: (id: number) => request<null>('DELETE', `/assets/${id}`),
+		listTicketAssets: (ticketId: number) =>
+			request<List<Asset>>('GET', `/tickets/${ticketId}/assets`),
+		linkTicketAsset: (ticketId: number, assetId: number) =>
+			request<Asset>('POST', `/tickets/${ticketId}/assets`, { asset_id: assetId }),
+		unlinkTicketAsset: (ticketId: number, assetId: number) =>
+			request<null>('DELETE', `/tickets/${ticketId}/assets/${assetId}`),
 
 		listTags: () => request<List<TagCount>>('GET', '/tags'),
 		listCategories: () => request<List<Category>>('GET', '/categories'),

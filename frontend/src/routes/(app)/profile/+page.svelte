@@ -1,13 +1,14 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { toast } from 'svelte-sonner';
-	import { api, ApiError } from '#lib/api/index.js';
+	import { api, ApiError, type Asset } from '#lib/api/index.js';
 	import HexAvatar from '#lib/components/hex-avatar.svelte';
 	import PageHeader from '#lib/components/page-header.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { roleLabels } from '#lib/format.js';
+	import { formatDate, roleLabels } from '#lib/format.js';
 	import { setSession, user } from '#lib/stores/auth.js';
 
 	let name = $state($user?.name ?? '');
@@ -21,6 +22,14 @@
 	let confirmPassword = $state('');
 	let passwordErrors = $state<Record<string, string>>({});
 	let savingPassword = $state(false);
+
+	let myAssets = $state<Asset[]>([]);
+	$effect(() => {
+		api
+			.myAssets()
+			.then((r) => (myAssets = r.items))
+			.catch(() => (myAssets = []));
+	});
 
 	const emailChanged = $derived(email.trim() !== ($user?.email ?? ''));
 
@@ -96,6 +105,38 @@
 				</div>
 			</Card.Content>
 		</Card.Root>
+
+		{#if myAssets.length > 0}
+			<Card.Root>
+				<Card.Header>
+					<Card.Title>Mis equipos</Card.Title>
+					<Card.Description>Los equipos que tienes asignados.</Card.Description>
+				</Card.Header>
+				<Card.Content>
+					<ul class="divide-y">
+						{#each myAssets as a (a.id)}
+							<li class="flex flex-wrap items-center gap-x-4 gap-y-1 py-3 text-sm">
+								<div class="min-w-0 flex-1">
+									<p class="font-medium">
+										<span class="font-mono">{a.tag}</span> · {a.name}
+									</p>
+									<p class="text-xs text-muted-foreground">
+										{a.model || 'Sin modelo'} · Garantía hasta {formatDate(a.warranty_until)}
+									</p>
+								</div>
+								<a
+									href={resolve(`/(app)/tickets/new?asset=${a.id}`)}
+									class="font-medium text-primary underline-offset-4 hover:underline dark:text-honey"
+									aria-label={`Reportar un problema con ${a.tag}`}
+								>
+									Reportar un problema
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</Card.Content>
+			</Card.Root>
+		{/if}
 
 		<Card.Root>
 			<Card.Header>

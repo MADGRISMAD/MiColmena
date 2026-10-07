@@ -12,6 +12,9 @@ type statsResponse struct {
 	AvgResolutionHours *float64 `json:"avg_resolution_hours_30d"`
 	// Tickets pendientes que ya superaron algún plazo de SLA.
 	SLABreached int `json:"sla_breached"`
+	// Colas de quien consulta: sin resolver asignados a mí, y solicitudes del catálogo sin resolver.
+	MineOpen     int `json:"mine_open"`
+	RequestsOpen int `json:"requests_open"`
 	// Valoraciones de los clientes en los últimos 30 días.
 	Satisfaction struct {
 		Good int `json:"good"`
@@ -73,9 +76,12 @@ func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
 			(SELECT count(*) FROM tickets t JOIN sla_policies p ON p.org_id = t.org_id AND p.priority = t.priority
 			 WHERE t.org_id = $1 AND `+slaBreached+`),
 			(SELECT count(*) FROM tickets WHERE org_id = $1 AND satisfaction = 'good' AND rated_at > now() - interval '30 days'),
-			(SELECT count(*) FROM tickets WHERE org_id = $1 AND satisfaction = 'bad' AND rated_at > now() - interval '30 days')`,
-		claimsFrom(r).OrgID,
-	).Scan(&resp.AvgResolutionHours, &resp.SLABreached, &resp.Satisfaction.Good, &resp.Satisfaction.Bad); err != nil {
+			(SELECT count(*) FROM tickets WHERE org_id = $1 AND satisfaction = 'bad' AND rated_at > now() - interval '30 days'),
+			(SELECT count(*) FROM tickets WHERE org_id = $1 AND assignee_id = $2 AND status NOT IN ('resolved', 'closed')),
+			(SELECT count(*) FROM tickets WHERE org_id = $1 AND kind = 'request' AND status NOT IN ('resolved', 'closed'))`,
+		claimsFrom(r).OrgID, claimsFrom(r).UserID(),
+	).Scan(&resp.AvgResolutionHours, &resp.SLABreached, &resp.Satisfaction.Good, &resp.Satisfaction.Bad,
+		&resp.MineOpen, &resp.RequestsOpen); err != nil {
 		internalError(w, err)
 		return
 	}

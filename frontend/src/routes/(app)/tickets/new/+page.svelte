@@ -3,8 +3,9 @@
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LightbulbIcon from '@lucide/svelte/icons/lightbulb';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
-	import { api, TICKET_PRIORITIES, type Article } from '#lib/api/index.js';
+	import { api, TICKET_PRIORITIES, type Article, type Asset } from '#lib/api/index.js';
 	import FilePicker from '#lib/components/file-picker.svelte';
 	import FormField from '#lib/components/form-field.svelte';
 	import PageHeader from '#lib/components/page-header.svelte';
@@ -12,6 +13,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { priorityLabels } from '#lib/format.js';
@@ -21,6 +23,17 @@
 	let files = $state<File[]>([]);
 	let categories = $state<string[]>([]);
 	let suggestions = $state<Article[]>([]);
+
+	// Equipos del solicitante: se puede indicar con cuál tiene el problema (?asset=<id> lo preselecciona).
+	let myAssets = $state<Asset[]>([]);
+	let assetId = $state(page.url.searchParams.get('asset') ?? '');
+
+	$effect(() => {
+		api
+			.myAssets()
+			.then((r) => (myAssets = r.items))
+			.catch(() => (myAssets = []));
+	});
 
 	$effect(() => {
 		api
@@ -33,7 +46,8 @@
 		ticketSchema,
 		emptyTicket,
 		async (data) => {
-			const ticket = await api.createTicket(data);
+			const selected = myAssets.find((a) => String(a.id) === assetId);
+			const ticket = await api.createTicket({ ...data, asset_id: selected?.id });
 			const failed: string[] = [];
 			for (const file of files) {
 				await api.uploadAttachment(ticket.id, file).catch(() => failed.push(file.name));
@@ -148,6 +162,18 @@
 						</FormField>
 					{/if}
 				</div>
+
+				{#if myAssets.length > 0}
+					<div class="grid gap-1.5">
+						<Label for="asset">¿Con qué equipo tienes el problema?</Label>
+						<NativeSelect id="asset" name="asset" class="w-full" bind:value={assetId}>
+							<NativeSelectOption value="">Ninguno</NativeSelectOption>
+							{#each myAssets as a (a.id)}
+								<NativeSelectOption value={String(a.id)}>{a.tag} · {a.name}</NativeSelectOption>
+							{/each}
+						</NativeSelect>
+					</div>
+				{/if}
 
 				<div class="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-2">
 					<FilePicker bind:files disabled={$submitting} />

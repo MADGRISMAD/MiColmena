@@ -13,6 +13,9 @@
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import BuildingIcon from '@lucide/svelte/icons/building-2';
+	import ConciergeBellIcon from '@lucide/svelte/icons/concierge-bell';
+	import LaptopIcon from '@lucide/svelte/icons/laptop';
+	import ListChecksIcon from '@lucide/svelte/icons/list-checks';
 	import GaugeIcon from '@lucide/svelte/icons/gauge';
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
@@ -125,6 +128,13 @@
 						count: stats?.unassigned_open
 					},
 					{
+						href: resolve('/(app)/tickets?kind=request'),
+						label: 'Solicitudes',
+						icon: ListChecksIcon,
+						params: { kind: 'request' },
+						count: stats?.requests_open
+					},
+					{
 						href: resolve('/(app)/tickets?status=waiting'),
 						label: 'En espera del cliente',
 						icon: ClockIcon,
@@ -143,7 +153,7 @@
 			: [{ href: resolve('/(app)/tickets'), label: 'Mis tickets', icon: InboxIcon, params: {} }]
 	);
 
-	const filterKeys = ['status', 'priority', 'assignee', 'tag', 'sla', 'q'];
+	const filterKeys = ['status', 'priority', 'assignee', 'tag', 'sla', 'kind', 'asset', 'q'];
 
 	function isViewActive(view: View): boolean {
 		const path = page.url.pathname;
@@ -188,9 +198,11 @@
 	type Link = { href: string; label: string; icon: typeof InboxIcon };
 
 	const resources = $derived<Link[]>([
+		{ href: resolve('/(app)/catalog'), label: 'Catálogo de servicios', icon: ConciergeBellIcon },
 		{ href: resolve('/help'), label: 'Base de conocimiento', icon: BookOpenIcon },
 		...($isStaff
 			? [
+					{ href: resolve('/(app)/assets'), label: 'Activos', icon: LaptopIcon },
 					{
 						href: resolve('/(app)/macros'),
 						label: 'Respuestas guardadas',
@@ -208,6 +220,11 @@
 		$user?.role === 'admin'
 			? [
 					{ href: resolve('/(app)/admin/users'), label: 'Usuarios', icon: UsersIcon },
+					{
+						href: resolve('/(app)/admin/catalog'),
+						label: 'Catálogo (editar)',
+						icon: ConciergeBellIcon
+					},
 					...($org && !$org.platform
 						? [{ href: resolve('/(app)/admin/plan'), label: 'Tu plan', icon: GaugeIcon }]
 						: []),

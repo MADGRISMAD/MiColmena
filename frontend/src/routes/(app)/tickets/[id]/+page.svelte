@@ -17,6 +17,7 @@
 		ApiError,
 		TICKET_PRIORITIES,
 		TICKET_STATUSES,
+		type Asset,
 		type Attachment,
 		type Comment,
 		type Macro,
@@ -26,6 +27,7 @@
 		type UpdateTicketInput,
 		type User
 	} from '#lib/api/index.js';
+	import AssetStateBadge from '#lib/components/asset-state-badge.svelte';
 	import AttachmentList from '#lib/components/attachment-list.svelte';
 	import EmptyState from '#lib/components/empty-state.svelte';
 	import FilePicker from '#lib/components/file-picker.svelte';
@@ -40,6 +42,7 @@
 	import * as Alert from '#lib/components/ui/alert/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
@@ -135,6 +138,80 @@
 			.then((r) => (tagSuggestions = r.items.map((t) => t.name)))
 			.catch(() => {});
 	});
+
+	// --- Equipos vinculados (solo soporte) ---
+	let linkedAssets = $state<Asset[]>([]);
+	let requesterAssets = $state<Asset[]>([]);
+	let assetQuery = $state('');
+	let assetResults = $state<Asset[]>([]);
+	let assetBusy = $state(false);
+
+	$effect(() => {
+		if (!$isStaff) return;
+		const id = ticketId;
+		api
+			.listTicketAssets(id)
+			.then((r) => (linkedAssets = r.items))
+			.catch(() => (linkedAssets = []));
+	});
+
+	// Los equipos que tiene asignados quien abrió el ticket se sugieren primero.
+	$effect(() => {
+		const requesterId = ticket?.requester.id;
+		if (!$isStaff || !requesterId) return;
+		api
+			.listAssets({ assigned: requesterId, limit: 10 })
+			.then((r) => (requesterAssets = r.items))
+			.catch(() => (requesterAssets = []));
+	});
+
+	$effect(() => {
+		const q = assetQuery.trim();
+		if (!q) {
+			assetResults = [];
+			return;
+		}
+		const timer = setTimeout(() => {
+			api
+				.listAssets({ q, limit: 5 })
+				.then((r) => (assetResults = r.items))
+				.catch(() => (assetResults = []));
+		}, 250);
+		return () => clearTimeout(timer);
+	});
+
+	const isLinked = (a: Asset) => linkedAssets.some((l) => l.id === a.id);
+	const suggestedAssets = $derived(requesterAssets.filter((a) => !isLinked(a)));
+	const searchableAssets = $derived(assetResults.filter((a) => !isLinked(a)));
+
+	async function linkAsset(asset: Asset) {
+		if (!ticket) return;
+		assetBusy = true;
+		try {
+			await api.linkTicketAsset(ticket.id, asset.id);
+			linkedAssets = [...linkedAssets, asset];
+			assetQuery = '';
+			toast.success(`Equipo ${asset.tag} vinculado`);
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'No se pudo vincular el equipo');
+		} finally {
+			assetBusy = false;
+		}
+	}
+
+	async function unlinkAsset(asset: Asset) {
+		if (!ticket) return;
+		assetBusy = true;
+		try {
+			await api.unlinkTicketAsset(ticket.id, asset.id);
+			linkedAssets = linkedAssets.filter((l) => l.id !== asset.id);
+			toast.success(`Equipo ${asset.tag} desvinculado`);
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'No se pudo desvincular el equipo');
+		} finally {
+			assetBusy = false;
+		}
+	}
 
 	async function update(changes: UpdateTicketInput, successMessage: string) {
 		if (!ticket) return;
@@ -314,6 +391,14 @@
 				{#if ticket.category}
 					<span class="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
 						{ticket.category}
+					</span>
+				{/if}
+				{#if ticket.kind === 'request'}
+					<span
+						class="rounded-md bg-honey/25 px-2 py-0.5 text-xs font-medium text-foreground"
+						data-testid="request-badge"
+					>
+						Solicitud{ticket.catalog_item ? ` · ${ticket.catalog_item.name}` : ''}
 					</span>
 				{/if}
 				{#each ticket.tags as tag (tag)}
@@ -791,6 +876,97 @@
 								<div class="pt-1"><SlaBadge {ticket} always /></div>
 							{/if}
 						</dl>
+					</Card.Content>
+				</Card.Root>
+			{/if}
+
+			{#if $isStaff}
+				<Card.Root class="gap-3 py-5" data-testid="ticket-assets">
+					<Card.Header class="px-5">
+						<Card.Title class="text-sm">Equipos</Card.Title>
+					</Card.Header>
+					<Card.Content class="grid gap-3 px-5 text-sm">
+						{#if linkedAssets.length === 0}
+							<p class="text-muted-foreground">Ningún equipo vinculado.</p>
+						{:else}
+							<ul class="grid gap-2">
+								{#each linkedAssets as asset (asset.id)}
+									<li class="flex flex-wrap items-center gap-x-2 gap-y-1">
+										<a
+											href={resolve('/(app)/assets/[id]', { id: String(asset.id) })}
+											class="min-w-0 flex-1 hover:underline"
+										>
+											<span class="font-mono font-medium">{asset.tag}</span>
+											<span class="text-muted-foreground">{asset.name}</span>
+										</a>
+										<AssetStateBadge state={asset.state} />
+										<Button
+											variant="ghost"
+											size="sm"
+											disabled={assetBusy}
+											aria-label={`Desvincular ${asset.tag}`}
+											onclick={() => unlinkAsset(asset)}
+										>
+											Desvincular
+										</Button>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+
+						{#if suggestedAssets.length > 0}
+							<div>
+								<p class="mb-1 text-xs font-medium text-muted-foreground">
+									Equipos de {ticket.requester.name}
+								</p>
+								<ul class="grid gap-1">
+									{#each suggestedAssets as asset (asset.id)}
+										<li>
+											<button
+												type="button"
+												class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-muted"
+												disabled={assetBusy}
+												onclick={() => linkAsset(asset)}
+											>
+												<span class="font-mono font-medium">{asset.tag}</span>
+												<span class="truncate text-muted-foreground">{asset.name}</span>
+											</button>
+										</li>
+									{/each}
+								</ul>
+							</div>
+						{/if}
+
+						<div class="grid gap-1.5">
+							<Label for="asset-search">Vincular un equipo</Label>
+							<Input
+								id="asset-search"
+								type="search"
+								placeholder="Buscar por etiqueta o nombre"
+								bind:value={assetQuery}
+							/>
+							{#if assetQuery.trim()}
+								{#if searchableAssets.length === 0}
+									<p class="text-xs text-muted-foreground">Sin resultados.</p>
+								{:else}
+									<ul class="grid gap-1" aria-label="Resultados de equipos">
+										{#each searchableAssets as asset (asset.id)}
+											<li>
+												<button
+													type="button"
+													class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-muted"
+													disabled={assetBusy}
+													onclick={() => linkAsset(asset)}
+												>
+													<span class="font-mono font-medium">{asset.tag}</span>
+													<span class="truncate text-muted-foreground">{asset.name}</span>
+												</button>
+											</li>
+										{/each}
+									</ul>
+								{/if}
+							{/if}
+						</div>
 					</Card.Content>
 				</Card.Root>
 			{/if}

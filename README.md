@@ -14,6 +14,9 @@ Plataforma de gestión de tickets de soporte y atención al cliente.
 - **Centro de ayuda** público con buscador; al abrir un ticket se sugieren artículos.
 - **Reportes** por periodo (volumen, tiempos, SLA, satisfacción, por agente y categoría) y **exportación a CSV**.
 - **Administración**: alta de agentes, roles, desactivar cuentas, categorías y plazos de SLA.
+- **Catálogo de servicios**: formularios para pedir cosas (acceso a un sistema, equipo nuevo, alta de empleado…). Cada pedido crea un ticket de tipo *solicitud* con las respuestas, y el administrador arma el catálogo (categorías, servicios y campos del formulario) en *Administración → Catálogo*.
+- **Activos**: inventario de equipos (etiqueta, serie, responsable, ubicación, estado, compra y garantía) con panel de resumen, historial de cambios, y vínculo con tickets para ver todo lo que le ha pasado a cada equipo. Las personas ven *Mis equipos* y pueden reportar un problema con uno.
+- **Colas en el dashboard**: tarjetas de color (asignados a mí, sin asignar, solicitudes, urgentes, SLA vencido) que abren la lista filtrada.
 - **Multiempresa**: cada empresa se registra sola en `/signup`, tiene su portal (`/e/<empresa>`), sus usuarios, tickets, categorías, SLA, respuestas guardadas y artículos, y no ve nada de las demás.
 - **Planes**: límite de agentes por empresa, página *Tu plan* con el uso y solicitud de ampliación, y una sola sesión a la vez por agente.
 - **Cuenta**: perfil, cambio de contraseña (cierra las demás sesiones) y recuperación por correo.
@@ -133,6 +136,11 @@ Todas las rutas, salvo `health`, `register` y `login`, requieren `Authorization:
 | GET · PUT | `/api/sla` | agentes · admin | Plazos por prioridad |
 | GET | `/api/reports`, `/api/reports/tickets.csv` | agentes | Reporte por rango (`from`, `to`, `tz`) y exportación |
 | GET · POST, PATCH, DELETE | `/api/articles` | todos · agentes | Centro de ayuda (sin sesión, solo los publicados) |
+| GET | `/api/catalog` · POST `/api/catalog/items/{id}/request` | autenticado | Catálogo de servicios (`?all=1` para administradores) / pedir un servicio (crea un ticket `kind=request`) |
+| POST, PATCH, DELETE | `/api/catalog/categories`, `/api/catalog/items` | admin | Editar el catálogo |
+| GET, POST, PATCH, DELETE | `/api/assets`, `/api/assets/{id}` | agentes (borrar: admin) | Inventario de equipos (`q`, `state`, `category`, `assigned`, `warranty`); el detalle incluye actividad y tickets |
+| GET | `/api/assets/summary` · `/api/assets/mine` | agentes · autenticado | Números del panel / equipos asignados a mí |
+| GET, POST, DELETE | `/api/tickets/{id}/assets` | agentes | Equipos vinculados a un ticket (también `?asset=` y `?kind=` en la lista de tickets) |
 | GET · PATCH | `/api/org` | autenticado · admin | Empresa actual, agentes usados y límite; cambiar el nombre |
 | POST | `/api/org/upgrade` | admin | Pedir más agentes (llega como solicitud a la plataforma) |
 | GET · PATCH | `/api/platform/orgs`, `/api/platform/orgs/{id}` | plataforma | Todas las empresas; cambiar agentes permitidos, personas o suspender |

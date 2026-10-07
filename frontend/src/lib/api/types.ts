@@ -56,7 +56,13 @@ export interface Ticket {
 	satisfaction: Satisfaction;
 	satisfaction_comment: string;
 	rated_at: string | null;
+	/** Incidente (algo falló) o solicitud (se pidió algo del catálogo de servicios). */
+	kind: TicketKind;
+	catalog_item: { id: number; name: string } | null;
 }
+
+export const TICKET_KINDS = ['incident', 'request'] as const;
+export type TicketKind = (typeof TICKET_KINDS)[number];
 
 export type Satisfaction = '' | 'good' | 'bad';
 
@@ -84,6 +90,10 @@ export interface Stats {
 	unassigned_open: number;
 	avg_resolution_hours_30d: number | null;
 	sla_breached: number;
+	/** Sin resolver y asignados a quien consulta. */
+	mine_open: number;
+	/** Solicitudes del catálogo sin resolver. */
+	requests_open: number;
 	satisfaction_30d: { good: number; bad: number };
 }
 
@@ -231,6 +241,9 @@ export interface TicketFilters {
 	assignee?: 'me' | 'none' | number;
 	tag?: string;
 	sla?: 'breached';
+	kind?: TicketKind;
+	/** Id de un activo: tickets vinculados a ese equipo. */
+	asset?: number;
 	q?: string;
 	before?: number;
 	limit?: number;
@@ -243,6 +256,8 @@ export interface CreateTicketInput {
 	category?: string;
 	custom_fields?: Record<string, unknown>;
 	requester_id?: number;
+	/** Equipo del que trata el ticket (un cliente solo puede elegir los suyos). */
+	asset_id?: number;
 }
 
 export interface UpdateTicketInput {
@@ -346,4 +361,180 @@ export interface SignupInput {
 	email: string;
 	password: string;
 	accept_terms: boolean;
+}
+
+// --- Catálogo de servicios ---
+
+export const FIELD_TYPES = ['text', 'textarea', 'select', 'number', 'date'] as const;
+export type FieldType = (typeof FIELD_TYPES)[number];
+
+export const CATALOG_ICONS = [
+	'package',
+	'shield',
+	'mail',
+	'phone',
+	'users',
+	'wrench',
+	'laptop',
+	'key',
+	'chart'
+] as const;
+export type CatalogIcon = (typeof CATALOG_ICONS)[number];
+
+/** Una pregunta del formulario de un servicio. */
+export interface FormField {
+	key: string;
+	label: string;
+	type: FieldType;
+	required: boolean;
+	options?: string[];
+}
+
+export interface ServiceItem {
+	id: number;
+	category_id: number;
+	name: string;
+	description: string;
+	fields: FormField[];
+	priority: TicketPriority;
+	ticket_category: string;
+	active: boolean;
+	position: number;
+	created_at: string;
+}
+
+export interface ServiceCategory {
+	id: number;
+	name: string;
+	description: string;
+	icon: CatalogIcon;
+	position: number;
+	items: ServiceItem[];
+}
+
+export interface ServiceCategoryInput {
+	name: string;
+	description?: string;
+	icon?: CatalogIcon;
+	position?: number;
+}
+
+export interface ServiceItemInput {
+	category_id: number;
+	name: string;
+	description?: string;
+	fields?: (Omit<FormField, 'key'> & { key?: string })[];
+	priority?: TicketPriority;
+	ticket_category?: string;
+	active?: boolean;
+	position?: number;
+}
+
+export interface ServiceRequestInput {
+	/** Respuestas del formulario, por el `key` de cada campo. */
+	values: Record<string, string | number>;
+	notes?: string;
+	asset_id?: number;
+}
+
+// --- Activos ---
+
+export const ASSET_CATEGORIES = [
+	'computer',
+	'phone',
+	'monitor',
+	'network',
+	'peripheral',
+	'software',
+	'other'
+] as const;
+export type AssetCategory = (typeof ASSET_CATEGORIES)[number];
+
+export const ASSET_STATES = ['in_stock', 'in_use', 'in_repair', 'retired'] as const;
+export type AssetState = (typeof ASSET_STATES)[number];
+
+export interface Asset {
+	id: number;
+	tag: string;
+	name: string;
+	category: AssetCategory;
+	model: string;
+	serial: string;
+	state: AssetState;
+	assigned_to: UserRef | null;
+	location: string;
+	/** Fechas AAAA-MM-DD. */
+	purchase_date: string | null;
+	purchase_cost: number | null;
+	warranty_until: string | null;
+	notes: string;
+	created_at: string;
+	updated_at: string;
+	/** Tickets sin resolver vinculados a este equipo. */
+	open_tickets: number;
+}
+
+/** Datos editables de un equipo (el PATCH reemplaza todos). */
+export interface AssetInput {
+	tag: string;
+	name: string;
+	category?: AssetCategory;
+	model?: string;
+	serial?: string;
+	state?: AssetState;
+	assigned_to?: number | null;
+	location?: string;
+	purchase_date?: string;
+	purchase_cost?: number | null;
+	warranty_until?: string;
+	notes?: string;
+}
+
+export type AssetEventKind = 'created' | 'state' | 'assigned' | 'location' | 'updated' | 'ticket';
+
+export interface AssetEvent {
+	id: number;
+	actor: UserRef | null;
+	kind: AssetEventKind;
+	/** Para 'updated', new_value son las claves de los campos cambiados separadas por comas. */
+	old_value: string;
+	new_value: string;
+	created_at: string;
+}
+
+export interface AssetTicket {
+	id: number;
+	title: string;
+	status: TicketStatus;
+	priority: TicketPriority;
+	kind: TicketKind;
+	created_at: string;
+}
+
+export interface AssetDetail {
+	asset: Asset;
+	events: AssetEvent[];
+	tickets: AssetTicket[];
+}
+
+export interface AssetFilters {
+	q?: string;
+	state?: AssetState;
+	category?: AssetCategory;
+	/** 'me', 'none' o el id de un usuario. */
+	assigned?: 'me' | 'none' | number;
+	warranty?: 'expiring' | 'expired';
+	before?: number;
+	limit?: number;
+}
+
+export interface AssetSummary {
+	total: number;
+	total_value: number;
+	by_state: Record<AssetState, number>;
+	by_category: Record<AssetCategory, number>;
+	warranty_expiring: number;
+	warranty_expired: number;
+	with_open_tickets: number;
+	unassigned_in_use: number;
 }

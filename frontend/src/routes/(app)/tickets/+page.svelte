@@ -23,6 +23,7 @@
 	import SlaBadge from '#lib/components/sla-badge.svelte';
 	import StatusBadge from '#lib/components/status-badge.svelte';
 	import TagChip from '#lib/components/tag-chip.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
@@ -112,11 +113,15 @@
 			? 'Mis tickets'
 			: filters.sla === 'breached'
 				? 'SLA vencido'
-				: filters.assignee === 'me'
-					? 'Asignados a mí'
-					: filters.assignee === 'none'
-						? 'Sin asignar'
-						: 'Todos los tickets'
+				: filters.kind === 'request'
+					? 'Solicitudes'
+					: filters.asset
+						? `Tickets del equipo #${filters.asset}`
+						: filters.assignee === 'me'
+							? 'Asignados a mí'
+							: filters.assignee === 'none'
+								? 'Sin asignar'
+								: 'Todos los tickets'
 	);
 	const description = $derived(
 		filters.sla === 'breached'
@@ -428,12 +433,19 @@
 							#{ticket.id}
 						</td>
 						<td class="max-w-0 px-4 py-3">
-							<a
-								href={resolve('/(app)/tickets/[id]', { id: String(ticket.id) })}
-								class="block truncate font-medium after:absolute after:inset-0 hover:text-primary dark:hover:text-honey"
-							>
-								{ticket.title}
-							</a>
+							<span class="flex items-center gap-2">
+								<a
+									href={resolve('/(app)/tickets/[id]', { id: String(ticket.id) })}
+									class="block min-w-0 truncate font-medium after:absolute after:inset-0 hover:text-primary dark:hover:text-honey"
+								>
+									{ticket.title}
+								</a>
+								{#if ticket.kind === 'request'}
+									<Badge variant="outline" class="relative z-10" title={ticket.catalog_item?.name}
+										>Solicitud</Badge
+									>
+								{/if}
+							</span>
 							{#if ticket.category || ticket.tags.length > 0 || $isStaff}
 								<span class="mt-1 flex items-center gap-1.5 overflow-hidden text-xs">
 									{#if $isStaff}<SlaBadge {ticket} />{/if}
@@ -491,6 +503,11 @@
 				>
 					{ticket.title}
 				</a>
+				{#if ticket.kind === 'request'}
+					<Badge variant="outline" class="relative z-10 mt-1" title={ticket.catalog_item?.name}
+						>Solicitud</Badge
+					>
+				{/if}
 				{#if $isStaff || ticket.tags.length > 0}
 					<div class="mt-2 flex flex-wrap gap-1.5">
 						{#if $isStaff}<SlaBadge {ticket} />{/if}
