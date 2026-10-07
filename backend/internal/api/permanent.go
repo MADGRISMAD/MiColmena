@@ -16,19 +16,19 @@ import (
 // cambiar el código, así queda en el historial de git.
 var permanentAdmins = []string{"madgrismad@gmail.com", "mayra.bamaca09@gmail.com", "luispantoja1102@gmail.com"}
 
-// isPermanentAdmin exige además el rol: quien se registre como cliente con uno de esos correos
+// isPermanentAdmin exige además el rol y que la cuenta sea de la empresa de la plataforma: quien se registre como cliente con uno de esos correos
 // no queda protegido.
 func isPermanentAdmin(u User) bool {
-	return u.Role == auth.RoleAdmin && slices.Contains(permanentAdmins, strings.ToLower(strings.TrimSpace(u.Email)))
+	return u.OrgID == platformOrgID && u.Role == auth.RoleAdmin && slices.Contains(permanentAdmins, strings.ToLower(strings.TrimSpace(u.Email)))
 }
 
 // permanentChange dice por qué no se permite un cambio sobre un administrador permanente, o "" si
 // se permite. Su contraseña solo la cambia otro permanente: si no, cualquiera se quedaría con la cuenta.
-func (s *Server) permanentChange(ctx context.Context, actorID, targetID int64, role *string, active *bool, email, password *string) (string, error) {
+func (s *Server) permanentChange(ctx context.Context, orgID, actorID, targetID int64, role *string, active *bool, email, password *string) (string, error) {
 	if actorID == targetID {
 		return "", nil
 	}
-	target, err := scanUser(s.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1`, targetID))
+	target, err := scanUser(s.db.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1 AND org_id = $2`, targetID, orgID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil // el handler responde 404
 	}

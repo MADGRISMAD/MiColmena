@@ -31,27 +31,32 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	var userID int64
-	var email, name string
-	err := s.db.QueryRow(r.Context(), `
-		SELECT id, email, name FROM users WHERE lower(email) = lower($1) AND active`,
-		strings.TrimSpace(in.Email)).Scan(&userID, &email, &name)
-	if errors.Is(err, pgx.ErrNoRows) {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
+	// El mismo email puede tener cuenta en varias empresas: se envía un enlace por cada una.
+	rows, err := s.db.Query(r.Context(), `
+		SELECT u.id, u.email, u.name, o.name FROM users u JOIN organizations o ON o.id = u.org_id
+		WHERE lower(u.email) = lower($1) AND u.active AND NOT o.suspended
+		ORDER BY o.id`, strings.TrimSpace(in.Email))
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-
-	var raw [32]byte
-	if _, err := rand.Read(raw[:]); err != nil {
+	type account struct {
+		id               int64
+		email, name, org string
+	}
+	accounts, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (account, error) {
+		var a account
+		err := row.Scan(&a.id, &a.email, &a.name, &a.org)
+		return a, err
+	})
+	if err != nil {
 		internalError(w, err)
 		return
 	}
-	token := hex.EncodeToString(raw[:])
-	link := s.appURL + "/reset-password?token=" + url.QueryEscape(token)
+	if len(accounts) == 0 {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
 
 	tx, err := s.db.Begin(r.Context())
 	if err != nil {
@@ -59,19 +64,29 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-	if _, err := tx.Exec(r.Context(), `
-		INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES ($1, $2, now() + make_interval(mins => $3))`,
-		hashResetToken(token), userID, int(resetTokenTTL.Minutes())); err != nil {
-		internalError(w, err)
-		return
-	}
-	if _, err := tx.Exec(r.Context(), `
-		INSERT INTO email_outbox (to_email, subject, body) VALUES ($1, $2, $3)`,
-		email, "Restablece tu contraseña de MiColmena",
-		"Hola "+name+":\n\nPara elegir una contraseña nueva, abre este enlace (vale durante 1 hora):\n\n"+link+
-			"\n\nSi no lo pediste tú, ignora este correo: tu contraseña no cambia."); err != nil {
-		internalError(w, err)
-		return
+	for _, a := range accounts {
+		var raw [32]byte
+		if _, err := rand.Read(raw[:]); err != nil {
+			internalError(w, err)
+			return
+		}
+		token := hex.EncodeToString(raw[:])
+		link := s.appURL + "/reset-password?token=" + url.QueryEscape(token)
+		if _, err := tx.Exec(r.Context(), `
+			INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES ($1, $2, now() + make_interval(mins => $3))`,
+			hashResetToken(token), a.id, int(resetTokenTTL.Minutes())); err != nil {
+			internalError(w, err)
+			return
+		}
+		if _, err := tx.Exec(r.Context(), `
+			INSERT INTO email_outbox (to_email, subject, body) VALUES ($1, $2, $3)`,
+			a.email, "Restablece tu contraseña de MiColmena ("+a.org+")",
+			"Hola "+a.name+":\n\nPara elegir una contraseña nueva para tu cuenta de «"+a.org+
+				"», abre este enlace (vale durante 1 hora):\n\n"+link+
+				"\n\nSi no lo pediste tú, ignora este correo: tu contraseña no cambia."); err != nil {
+			internalError(w, err)
+			return
+		}
 	}
 	if err := tx.Commit(r.Context()); err != nil {
 		internalError(w, err)

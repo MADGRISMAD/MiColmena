@@ -98,8 +98,16 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/auth/forgot", s.limitAuth(s.forgotPassword))
 	mux.Handle("POST /api/auth/reset", s.limitAuth(s.resetPassword))
 	mux.Handle("POST /api/leads", s.limitAuth(s.createLead))
-	mux.Handle("GET /api/leads", s.adminOnly(s.listLeads))
-	mux.Handle("PATCH /api/leads/{id}", s.adminOnly(s.updateLead))
+	mux.Handle("GET /api/leads", s.platformOnly(s.listLeads))
+	mux.Handle("PATCH /api/leads/{id}", s.platformOnly(s.updateLead))
+
+	mux.Handle("POST /api/signup", s.limitAuth(s.signup))
+	mux.Handle("GET /api/portal/{slug}", http.HandlerFunc(s.getPortal))
+	mux.Handle("GET /api/org", s.authed(s.getOrg))
+	mux.Handle("PATCH /api/org", s.adminOnly(s.updateOrg))
+	mux.Handle("POST /api/org/upgrade", s.adminOnly(s.requestUpgrade))
+	mux.Handle("GET /api/platform/orgs", s.platformOnly(s.listPlatformOrgs))
+	mux.Handle("PATCH /api/platform/orgs/{id}", s.platformOnly(s.updatePlatformOrg))
 	mux.Handle("GET /api/me", s.authed(s.me))
 	mux.Handle("PATCH /api/me", s.authed(s.updateMe))
 	mux.Handle("POST /api/me/password", s.authed(s.changePassword))
@@ -271,11 +279,13 @@ func (s *Server) authenticate(r *http.Request) (auth.Claims, int, string) {
 	}
 	// El rol se lee de la base de datos (búsqueda por clave primaria) para que
 	// un cambio de rol o un usuario eliminado se apliquen sin esperar a que expire el token.
-	var active bool
+	var active, suspended bool
 	var validAfter time.Time
-	if err := s.db.QueryRow(r.Context(),
-		`SELECT role, active, tokens_valid_after FROM users WHERE id = $1`, claims.UserID(),
-	).Scan(&claims.Role, &active, &validAfter); err != nil {
+	if err := s.db.QueryRow(r.Context(), `
+		SELECT u.role, u.active, u.tokens_valid_after, u.org_id, o.suspended
+		FROM users u JOIN organizations o ON o.id = u.org_id
+		WHERE u.id = $1`, claims.UserID(),
+	).Scan(&claims.Role, &active, &validAfter, &claims.OrgID, &suspended); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return auth.Claims{}, http.StatusUnauthorized, "el usuario ya no existe"
 		}
@@ -285,9 +295,13 @@ func (s *Server) authenticate(r *http.Request) (auth.Claims, int, string) {
 	if !active {
 		return auth.Claims{}, http.StatusUnauthorized, "esta cuenta está desactivada"
 	}
-	// Un cambio de contraseña invalida los tokens emitidos antes.
+	if suspended {
+		return auth.Claims{}, http.StatusUnauthorized, "la cuenta de esta empresa está suspendida"
+	}
+	// Un cambio de contraseña, o que un agente entre desde otro dispositivo, invalida los tokens anteriores.
 	if claims.IssuedAt == nil || claims.IssuedAt.Before(validAfter) {
-		return auth.Claims{}, http.StatusUnauthorized, "la sesión ya no es válida, vuelve a iniciar sesión"
+		return auth.Claims{}, http.StatusUnauthorized,
+			"tu sesión se cerró porque se entró con tu cuenta en otro dispositivo o cambió la contraseña"
 	}
 	return claims, 0, ""
 }

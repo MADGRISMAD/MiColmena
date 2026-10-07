@@ -11,7 +11,9 @@ import (
 
 func TestLeads(t *testing.T) {
 	e := newEnv(t)
-	boss := e.admin("jefa")
+	// Las solicitudes las gestionan los administradores permanentes de la plataforma.
+	boss := e.createUser("Dueño", "madgrismad@gmail.com", "admin")
+	otherAdmin := e.admin("jefa")
 	luis := e.agent("luis")
 
 	lead := map[string]any{
@@ -33,13 +35,15 @@ func TestLeads(t *testing.T) {
 		if !strings.Contains(body, "Agentes: 6") || !strings.Contains(body, "Personas en la empresa: 120") {
 			t.Errorf("el correo debe incluir lo elegido en la calculadora:\n%s", body)
 		}
-		if mails := e.outbox(); len(mails) != 1 || !strings.HasPrefix(mails[0], boss.Email) {
+		// Llega a todos los administradores de la plataforma.
+		if mails := e.outbox(); len(mails) != 2 || !strings.Contains(strings.Join(mails, "\n"), boss.Email) {
 			t.Errorf("correos = %v", mails)
 		}
 	})
 
 	t.Run("solo los administradores las ven y las marcan", func(t *testing.T) {
 		expectStatus(t, e.get("/api/leads", luis.Token), http.StatusForbidden)
+		expectStatus(t, e.get("/api/leads", otherAdmin.Token), http.StatusForbidden)
 		var out struct {
 			Items []api.Lead `json:"items"`
 		}

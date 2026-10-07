@@ -17,7 +17,8 @@ type Category struct {
 }
 
 func (s *Server) listCategories(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.db.Query(r.Context(), `SELECT id, name, created_at FROM categories ORDER BY lower(name)`)
+	rows, err := s.db.Query(r.Context(),
+		`SELECT id, name, created_at FROM categories WHERE org_id = $1 ORDER BY lower(name)`, claimsFrom(r).OrgID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -57,7 +58,7 @@ func (s *Server) createCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	var c Category
 	err := s.db.QueryRow(r.Context(),
-		`INSERT INTO categories (name) VALUES ($1) RETURNING id, name, created_at`, name,
+		`INSERT INTO categories (name, org_id) VALUES ($1, $2) RETURNING id, name, created_at`, name, claimsFrom(r).OrgID,
 	).Scan(&c.ID, &c.Name, &c.CreatedAt)
 	if isUniqueViolation(err) {
 		validationErrors{"name": "ya existe una categoría con ese nombre"}.write(w)
@@ -88,7 +89,9 @@ func (s *Server) renameCategory(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(r.Context())
 
 	var old string
-	if err := tx.QueryRow(r.Context(), `SELECT name FROM categories WHERE id = $1 FOR UPDATE`, id).Scan(&old); err != nil {
+	orgID := claimsFrom(r).OrgID
+	if err := tx.QueryRow(r.Context(),
+		`SELECT name FROM categories WHERE id = $1 AND org_id = $2 FOR UPDATE`, id, orgID).Scan(&old); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "categoría no encontrada")
 			return
@@ -108,7 +111,8 @@ func (s *Server) renameCategory(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	if _, err := tx.Exec(r.Context(), `UPDATE tickets SET category = $2 WHERE category = $1`, old, name); err != nil {
+	if _, err := tx.Exec(r.Context(),
+		`UPDATE tickets SET category = $2 WHERE category = $1 AND org_id = $3`, old, name, orgID); err != nil {
 		internalError(w, err)
 		return
 	}
@@ -125,7 +129,7 @@ func (s *Server) deleteCategory(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tag, err := s.db.Exec(r.Context(), `DELETE FROM categories WHERE id = $1`, id)
+	tag, err := s.db.Exec(r.Context(), `DELETE FROM categories WHERE id = $1 AND org_id = $2`, id, claimsFrom(r).OrgID)
 	if err != nil {
 		internalError(w, err)
 		return

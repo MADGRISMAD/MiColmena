@@ -283,10 +283,12 @@ func (s *Server) loadAttachment(w http.ResponseWriter, r *http.Request) (Attachm
 	}
 	a, err := scanAttachment(s.db.QueryRow(r.Context(), attachmentSelect+" WHERE a.id = $1", id))
 	claims := claimsFrom(r)
-	if err == nil && !claims.IsStaff() {
-		var requester int64
-		err = s.db.QueryRow(r.Context(), `SELECT requester_id FROM tickets WHERE id = $1`, a.TicketID).Scan(&requester)
-		if err == nil && (requester != claims.UserID() || a.Internal) {
+	if err == nil {
+		var requester, orgID int64
+		err = s.db.QueryRow(r.Context(), `SELECT requester_id, org_id FROM tickets WHERE id = $1`, a.TicketID).
+			Scan(&requester, &orgID)
+		// Otra empresa, o un cliente que no es el solicitante o mira una nota interna: no existe.
+		if err == nil && (orgID != claims.OrgID || (!claims.IsStaff() && (requester != claims.UserID() || a.Internal))) {
 			err = pgx.ErrNoRows
 		}
 	}

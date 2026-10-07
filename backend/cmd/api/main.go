@@ -108,7 +108,7 @@ func ensureAdmin(ctx context.Context, pool *pgxpool.Pool, cfg config.Config) err
 		return nil
 	}
 	var exists bool
-	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE role = 'admin')`).Scan(&exists); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE role = 'admin' AND org_id = 1)`).Scan(&exists); err != nil {
 		return err
 	}
 	if exists {
@@ -124,9 +124,9 @@ func ensureAdmin(ctx context.Context, pool *pgxpool.Pool, cfg config.Config) err
 	// Si el email ya lo registró otra persona no se le da el rol de administrador:
 	// eso permitiría quedarse con la cuenta registrándose antes que el dueño.
 	tag, err := pool.Exec(ctx, `
-		INSERT INTO users (name, email, password_hash, role)
-		VALUES ('Administrador', $1, $2, 'admin')
-		ON CONFLICT (lower(email)) DO NOTHING`,
+		INSERT INTO users (name, email, password_hash, role, org_id)
+		VALUES ('Administrador', $1, $2, 'admin', 1)
+		ON CONFLICT (org_id, lower(email)) DO NOTHING`,
 		cfg.AdminEmail, hash)
 	if err != nil {
 		return err

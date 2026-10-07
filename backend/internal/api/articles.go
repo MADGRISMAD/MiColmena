@@ -18,37 +18,53 @@ type Article struct {
 	Author    *UserRef  `json:"author"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// Empresa dueña del artículo: el centro de ayuda de cada empresa es público.
+	Org   orgChoice `json:"org"`
+	orgID int64
 }
 
 const articleSelect = `
-	SELECT a.id, a.title, a.body, a.category, a.published, u.id, u.name, a.created_at, a.updated_at
+	SELECT a.id, a.title, a.body, a.category, a.published, u.id, u.name, a.created_at, a.updated_at,
+	       o.slug, o.name, a.org_id
 	FROM articles a
+	JOIN organizations o ON o.id = a.org_id
 	LEFT JOIN users u ON u.id = a.author_id`
 
 func scanArticle(row pgx.Row) (Article, error) {
 	var a Article
 	var authorID *int64
 	var authorName *string
-	err := row.Scan(&a.ID, &a.Title, &a.Body, &a.Category, &a.Published, &authorID, &authorName, &a.CreatedAt, &a.UpdatedAt)
+	err := row.Scan(&a.ID, &a.Title, &a.Body, &a.Category, &a.Published, &authorID, &authorName, &a.CreatedAt, &a.UpdatedAt,
+		&a.Org.Slug, &a.Org.Name, &a.orgID)
 	if authorID != nil {
 		a.Author = &UserRef{ID: *authorID, Name: *authorName}
 	}
 	return a, err
 }
 
-// listArticles busca en la base de conocimiento (?q=texto). Sin sesión de agente, solo los publicados.
+// listArticles busca en la base de conocimiento (?q=texto) de una empresa: la indicada con ?org=<slug>
+// o, si no, la del usuario (o la de la plataforma para visitantes). Los borradores solo los ve su equipo.
 func (s *Server) listArticles(w http.ResponseWriter, r *http.Request) {
-	staff := claimsFrom(r).IsStaff()
+	claims := claimsFrom(r)
+	orgID := claims.OrgID
+	if slug := r.URL.Query().Get("org"); slug != "" || orgID == 0 {
+		org, ok := s.portalOrg(w, r, slug)
+		if !ok {
+			return
+		}
+		orgID = org.ID
+	}
+	staff := claims.IsStaff() && claims.OrgID == orgID
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	order := "a.updated_at DESC"
 	if q != "" {
 		order = "ts_rank(a.search, websearch_to_tsquery('spanish', $2)) DESC, a.updated_at DESC"
 	}
 	rows, err := s.db.Query(r.Context(), articleSelect+`
-		WHERE ($1 OR a.published)
+		WHERE a.org_id = $3 AND ($1 OR a.published) AND NOT o.suspended
 		  AND ($2 = '' OR a.search @@ websearch_to_tsquery('spanish', $2))
 		ORDER BY `+order+`
-		LIMIT 100`, staff, q)
+		LIMIT 100`, staff, q, orgID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -69,8 +85,10 @@ func (s *Server) getArticle(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a, err := scanArticle(s.db.QueryRow(r.Context(), articleSelect+" WHERE a.id = $1", id))
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !a.Published && !claimsFrom(r).IsStaff()) {
+	a, err := scanArticle(s.db.QueryRow(r.Context(), articleSelect+" WHERE a.id = $1 AND NOT o.suspended", id))
+	claims := claimsFrom(r)
+	ownTeam := claims.IsStaff() && claims.OrgID == a.orgID
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !a.Published && !ownTeam) {
 		writeError(w, http.StatusNotFound, "artículo no encontrado")
 		return
 	}
@@ -110,9 +128,9 @@ func (s *Server) createArticle(w http.ResponseWriter, r *http.Request) {
 	}
 	var id int64
 	if err := s.db.QueryRow(r.Context(), `
-		INSERT INTO articles (title, body, category, published, author_id)
-		VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		in.Title, in.Body, in.Category, in.Published, claimsFrom(r).UserID()).Scan(&id); err != nil {
+		INSERT INTO articles (title, body, category, published, author_id, org_id)
+		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		in.Title, in.Body, in.Category, in.Published, claimsFrom(r).UserID(), claimsFrom(r).OrgID).Scan(&id); err != nil {
 		internalError(w, err)
 		return
 	}
@@ -135,7 +153,7 @@ func (s *Server) updateArticle(w http.ResponseWriter, r *http.Request) {
 	}
 	tag, err := s.db.Exec(r.Context(), `
 		UPDATE articles SET title = $2, body = $3, category = $4, published = $5, updated_at = now()
-		WHERE id = $1`, id, in.Title, in.Body, in.Category, in.Published)
+		WHERE id = $1 AND org_id = $6`, id, in.Title, in.Body, in.Category, in.Published, claimsFrom(r).OrgID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -157,7 +175,7 @@ func (s *Server) deleteArticle(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tag, err := s.db.Exec(r.Context(), `DELETE FROM articles WHERE id = $1`, id)
+	tag, err := s.db.Exec(r.Context(), `DELETE FROM articles WHERE id = $1 AND org_id = $2`, id, claimsFrom(r).OrgID)
 	if err != nil {
 		internalError(w, err)
 		return

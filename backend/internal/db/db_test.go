@@ -70,7 +70,7 @@ func TestConstraints(t *testing.T) {
 
 	insert := func(email, role string) error {
 		_, err := pool.Exec(ctx,
-			`INSERT INTO users (name, email, password_hash, role) VALUES ('x', $1, 'h', $2)`, email, role)
+			`INSERT INTO users (name, email, password_hash, role, org_id) VALUES ('x', $1, 'h', $2, 1)`, email, role)
 		return err
 	}
 
@@ -78,7 +78,7 @@ func TestConstraints(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := insert("ana@x.com", "customer"); err == nil {
-		t.Error("el email debería ser único sin distinguir mayúsculas")
+		t.Error("el email debería ser único en la empresa sin distinguir mayúsculas")
 	}
 	if err := insert("b@x.com", "superuser"); err == nil {
 		t.Error("un rol que no existe debería rechazarse")

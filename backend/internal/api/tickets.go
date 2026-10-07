@@ -57,6 +57,9 @@ type Ticket struct {
 	Satisfaction        string     `json:"satisfaction"`
 	SatisfactionComment string     `json:"satisfaction_comment"`
 	RatedAt             *time.Time `json:"rated_at"`
+
+	// OrgID es la empresa del ticket; no se envía al cliente.
+	OrgID int64 `json:"-"`
 }
 
 // ticketSelect une al solicitante y al agente asignado en una sola consulta (sin N+1).
@@ -67,11 +70,11 @@ const ticketSelect = `
 	       t.first_response_at,
 	       t.created_at + p.first_response_minutes * interval '1 minute',
 	       t.created_at + p.resolution_minutes * interval '1 minute',
-	       t.satisfaction, t.satisfaction_comment, t.rated_at
+	       t.satisfaction, t.satisfaction_comment, t.rated_at, t.org_id
 	FROM tickets t
 	JOIN users r ON r.id = t.requester_id
 	LEFT JOIN users a ON a.id = t.assignee_id
-	JOIN sla_policies p ON p.priority = t.priority`
+	JOIN sla_policies p ON p.org_id = t.org_id AND p.priority = t.priority`
 
 // slaBreached es la condición SQL de un ticket pendiente que ya superó alguno de sus plazos.
 const slaBreached = `(t.status NOT IN ('resolved', 'closed') AND (
@@ -86,7 +89,7 @@ func scanTicket(row pgx.Row) (Ticket, error) {
 		&t.Requester.ID, &t.Requester.Name, &assigneeID, &assigneeName, &t.Tags,
 		&t.CustomFields, &t.CreatedAt, &t.UpdatedAt, &t.ResolvedAt,
 		&t.FirstResponseAt, &t.FirstResponseDue, &t.ResolutionDue,
-		&t.Satisfaction, &t.SatisfactionComment, &t.RatedAt)
+		&t.Satisfaction, &t.SatisfactionComment, &t.RatedAt, &t.OrgID)
 	if assigneeID != nil {
 		t.Assignee = &UserRef{ID: *assigneeID, Name: *assigneeName}
 	}
@@ -110,6 +113,8 @@ func (s *Server) listTickets(w http.ResponseWriter, r *http.Request) {
 		return "$" + strconv.Itoa(len(args))
 	}
 
+	// Cada empresa solo ve lo suyo.
+	where = append(where, "t.org_id = "+arg(claims.OrgID))
 	if !claims.IsStaff() {
 		where = append(where, "t.requester_id = "+arg(claims.UserID()))
 	}
@@ -208,7 +213,9 @@ func (s *Server) listTickets(w http.ResponseWriter, r *http.Request) {
 func (s *Server) loadTicket(w http.ResponseWriter, r *http.Request, id int64) (Ticket, bool) {
 	t, err := scanTicket(s.db.QueryRow(r.Context(), ticketSelect+" WHERE t.id = $1", id))
 	claims := claimsFrom(r)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !claims.IsStaff() && t.Requester.ID != claims.UserID()) {
+	// Un ticket de otra empresa se trata igual que uno inexistente, para no revelar que existe.
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && (t.OrgID != claims.OrgID ||
+		(!claims.IsStaff() && t.Requester.ID != claims.UserID()))) {
 		writeError(w, http.StatusNotFound, "ticket no encontrado")
 		return Ticket{}, false
 	}
@@ -263,7 +270,7 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	category, err := s.canonicalCategory(r.Context(), in.Category)
+	category, err := s.canonicalCategory(r.Context(), claims.OrgID, in.Category)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -276,7 +283,7 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 	requester := claims.UserID()
 	if in.RequesterID != nil {
 		requester = *in.RequesterID
-		if exists, err := s.userExists(r.Context(), requester, false); err != nil {
+		if exists, err := s.userExists(r.Context(), claims.OrgID, requester, false); err != nil {
 			internalError(w, err)
 			return
 		} else if !exists {
@@ -294,10 +301,10 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 
 	var id int64
 	err = tx.QueryRow(r.Context(), `
-		INSERT INTO tickets (title, description, priority, category, custom_fields, requester_id)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO tickets (title, description, priority, category, custom_fields, requester_id, org_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id`,
-		in.Title, in.Description, in.Priority, *category, in.CustomFields, requester,
+		in.Title, in.Description, in.Priority, *category, in.CustomFields, requester, claims.OrgID,
 	).Scan(&id)
 	if err != nil {
 		internalError(w, err)
@@ -386,7 +393,7 @@ func (s *Server) validatePatch(ctx context.Context, claims auth.Claims, p *ticke
 	}
 
 	if p.Category != nil {
-		category, err := s.canonicalCategory(ctx, *p.Category)
+		category, err := s.canonicalCategory(ctx, claims.OrgID, *p.Category)
 		if err != nil {
 			return nil, err
 		}
@@ -399,7 +406,7 @@ func (s *Server) validatePatch(ctx context.Context, claims auth.Claims, p *ticke
 			var assignee int64
 			if err := json.Unmarshal(p.AssigneeID, &assignee); err != nil {
 				errs.check(false, "assignee_id", "debe ser un número o null")
-			} else if exists, err := s.userExists(ctx, assignee, true); err != nil {
+			} else if exists, err := s.userExists(ctx, claims.OrgID, assignee, true); err != nil {
 				return nil, err
 			} else {
 				errs.check(exists, "assignee_id", "debe ser un agente o administrador activo")
@@ -499,7 +506,7 @@ func (s *Server) updateTicket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
-	current, err := fetchTicketForUpdate(r.Context(), tx, id)
+	current, err := fetchTicketForUpdate(r.Context(), tx, claims.OrgID, id)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -571,7 +578,8 @@ func (s *Server) bulkUpdateTickets(w http.ResponseWriter, r *http.Request) {
 	updated := 0
 	var out fanout
 	for _, id := range ids {
-		current, err := fetchTicketForUpdate(r.Context(), tx, id)
+		// Los ids de otra empresa se ignoran como si no existieran.
+		current, err := fetchTicketForUpdate(r.Context(), tx, claims.OrgID, id)
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue
 		}
@@ -612,8 +620,9 @@ func (s *Server) bulkUpdateTickets(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listTags(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.Query(r.Context(), `
 		SELECT tag, count(*) FROM tickets, unnest(tags) AS tag
+		WHERE org_id = $1
 		GROUP BY tag ORDER BY count(*) DESC, tag
-		LIMIT 200`)
+		LIMIT 200`, claimsFrom(r).OrgID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -678,19 +687,19 @@ func fetchTicket(ctx context.Context, q querier, id int64) (Ticket, error) {
 }
 
 // fetchTicketForUpdate lee el ticket y bloquea su fila hasta el final de la transacción.
-func fetchTicketForUpdate(ctx context.Context, tx pgx.Tx, id int64) (Ticket, error) {
-	return scanTicket(tx.QueryRow(ctx, ticketSelect+" WHERE t.id = $1 FOR UPDATE OF t", id))
+func fetchTicketForUpdate(ctx context.Context, tx pgx.Tx, orgID, id int64) (Ticket, error) {
+	return scanTicket(tx.QueryRow(ctx, ticketSelect+" WHERE t.id = $1 AND t.org_id = $2 FOR UPDATE OF t", id, orgID))
 }
 
 // canonicalCategory devuelve el nombre tal como está en la lista de categorías, "" si viene vacía,
 // o nil si no existe.
-func (s *Server) canonicalCategory(ctx context.Context, category string) (*string, error) {
+func (s *Server) canonicalCategory(ctx context.Context, orgID int64, category string) (*string, error) {
 	category = strings.TrimSpace(category)
 	if category == "" {
 		return &category, nil
 	}
 	var name string
-	err := s.db.QueryRow(ctx, `SELECT name FROM categories WHERE lower(name) = lower($1)`, category).Scan(&name)
+	err := s.db.QueryRow(ctx, `SELECT name FROM categories WHERE org_id = $1 AND lower(name) = lower($2)`, orgID, category).Scan(&name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -700,14 +709,14 @@ func (s *Server) canonicalCategory(ctx context.Context, category string) (*strin
 	return &name, nil
 }
 
-// userExists comprueba si existe el usuario activo; con staff=true exige que sea agente o administrador.
-func (s *Server) userExists(ctx context.Context, id int64, staff bool) (bool, error) {
+// userExists comprueba si existe el usuario activo en la empresa; con staff=true exige que sea agente o administrador.
+func (s *Server) userExists(ctx context.Context, orgID, id int64, staff bool) (bool, error) {
 	var exists bool
 	err := s.db.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1 FROM users
-			WHERE id = $1 AND active AND (NOT $2 OR role IN ('agent', 'admin'))
-		)`, id, staff).Scan(&exists)
+			WHERE id = $1 AND org_id = $3 AND active AND (NOT $2 OR role IN ('agent', 'admin'))
+		)`, id, staff, orgID).Scan(&exists)
 	return exists, err
 }
 

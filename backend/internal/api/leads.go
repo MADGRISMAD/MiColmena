@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -23,13 +24,15 @@ type Lead struct {
 	Plan     string `json:"plan"`
 	Message  string `json:"message"`
 	// Lo elegido en la calculadora de precios; 0 = no lo indicó.
-	Agents    int       `json:"agents"`
-	People    int       `json:"people"`
+	Agents int `json:"agents"`
+	People int `json:"people"`
+	// OrgID: si la pidió una empresa que ya usa MiColmena (ampliar plan).
+	OrgID     *int64    `json:"org_id"`
 	Handled   bool      `json:"handled"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-const leadColumns = `id, name, company, email, phone, team_size, plan, message, agents, people, handled, created_at`
+const leadColumns = `id, name, company, email, phone, team_size, plan, message, agents, people, org_id, handled, created_at`
 
 var (
 	leadTeamSizes = []string{"", "1-3", "4-10", "11-25", "26+"}
@@ -81,53 +84,70 @@ func (s *Server) createLead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, err := s.db.Begin(r.Context())
+	if err := s.saveLead(r.Context(), leadInput{
+		Name: in.Name, Company: in.Company, Email: in.Email, Phone: in.Phone, TeamSize: in.TeamSize,
+		Plan: in.Plan, Message: in.Message, Agents: in.Agents, People: in.People,
+	}); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+type leadInput struct {
+	Name, Company, Email, Phone, TeamSize, Plan, Message string
+	Agents, People                                       int
+	// OrgID: la empresa cliente que pide ampliar su plan (nil si viene de la landing).
+	OrgID *int64
+}
+
+// saveLead guarda la solicitud y avisa a los administradores de la plataforma (campana y correo).
+func (s *Server) saveLead(ctx context.Context, in leadInput) error {
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		internalError(w, err)
-		return
+		return err
 	}
-	defer tx.Rollback(r.Context())
+	defer tx.Rollback(ctx)
 
-	var id int64
-	if err := tx.QueryRow(r.Context(), `
-		INSERT INTO leads (name, company, email, phone, team_size, plan, message, agents, people)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-		in.Name, in.Company, in.Email, in.Phone, in.TeamSize, in.Plan, in.Message, in.Agents, in.People).Scan(&id); err != nil {
-		internalError(w, err)
-		return
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO leads (name, company, email, phone, team_size, plan, message, agents, people, org_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		in.Name, in.Company, in.Email, in.Phone, in.TeamSize, in.Plan, in.Message, in.Agents, in.People, in.OrgID); err != nil {
+		return err
 	}
 
-	summary := fmt.Sprintf("%s (%s) pidió una demo", in.Name, in.Company)
-	body := fmt.Sprintf("Nueva solicitud de demo:\n\nNombre: %s\nEmpresa: %s\nEmail: %s\nTeléfono: %s\nAgentes: %s\nPersonas en la empresa: %s\n\n%s\n\nVer solicitudes: %s/admin/leads",
-		in.Name, in.Company, in.Email, orDash(in.Phone), countOrDash(in.Agents), countOrDash(in.People), in.Message, s.appURL)
-	if _, err := tx.Exec(r.Context(), `
+	kind, subject := "pidió una demo", "Nueva solicitud de demo: "
+	if in.OrgID != nil {
+		kind, subject = "pidió ampliar su plan", "Ampliar plan: "
+	}
+	summary := fmt.Sprintf("%s (%s) %s", in.Name, in.Company, kind)
+	body := fmt.Sprintf("%s\n\nNombre: %s\nEmpresa: %s\nEmail: %s\nTeléfono: %s\nAgentes: %s\nPersonas en la empresa: %s\n\n%s\n\nVer solicitudes: %s/admin/leads",
+		summary, in.Name, in.Company, in.Email, orDash(in.Phone), countOrDash(in.Agents), countOrDash(in.People), in.Message, s.appURL)
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO notifications (user_id, kind, summary)
-		SELECT id, 'lead', $1 FROM users WHERE role = 'admin' AND active`, excerpt(summary, 200)); err != nil {
-		internalError(w, err)
-		return
+		SELECT id, 'lead', $1 FROM users WHERE role = 'admin' AND active AND org_id = $2`,
+		excerpt(summary, 200), platformOrgID); err != nil {
+		return err
 	}
-	if _, err := tx.Exec(r.Context(), `
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO email_outbox (to_email, subject, body)
-		SELECT email, $1, $2 FROM users WHERE role = 'admin' AND active AND email_notifications`,
-		"Nueva solicitud de demo: "+excerpt(in.Company, 80), body); err != nil {
-		internalError(w, err)
-		return
+		SELECT email, $1, $2 FROM users WHERE role = 'admin' AND active AND email_notifications AND org_id = $3`,
+		subject+excerpt(in.Company, 80), body, platformOrgID); err != nil {
+		return err
 	}
-	var admins []int64
-	rows, err := tx.Query(r.Context(), `SELECT id FROM users WHERE role = 'admin' AND active`)
-	if err == nil {
-		admins, err = pgx.CollectRows(rows, pgx.RowTo[int64])
-	}
+	rows, err := tx.Query(ctx, `SELECT id FROM users WHERE role = 'admin' AND active AND org_id = $1`, platformOrgID)
 	if err != nil {
-		internalError(w, err)
-		return
+		return err
 	}
-	if err := tx.Commit(r.Context()); err != nil {
-		internalError(w, err)
-		return
+	admins, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
 	}
 	s.broker.publish(fanout{users: admins})
-	w.WriteHeader(http.StatusCreated)
+	return nil
 }
 
 func orDash(s string) string {

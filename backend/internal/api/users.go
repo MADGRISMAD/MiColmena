@@ -23,14 +23,15 @@ type User struct {
 	EmailNotifications bool      `json:"email_notifications"`
 	CreatedAt          time.Time `json:"created_at"`
 	// Permanent: administrador que no se puede desactivar ni bajar de rol (ver permanent.go).
-	Permanent bool `json:"permanent"`
+	Permanent bool  `json:"permanent"`
+	OrgID     int64 `json:"org_id"`
 }
 
-const userColumns = `id, name, email, role, active, email_notifications, created_at`
+const userColumns = `id, name, email, role, active, email_notifications, created_at, org_id`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.EmailNotifications, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.EmailNotifications, &u.CreatedAt, &u.OrgID)
 	u.Permanent = isPermanentAdmin(u)
 	return u, err
 }
@@ -41,11 +42,14 @@ type authResponse struct {
 	User      User      `json:"user"`
 }
 
+// register crea una cuenta de cliente en el portal de una empresa (?org=<slug> en el cuerpo).
+// Sin empresa, la cuenta es del soporte de la propia plataforma.
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name     string `json:"name"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Org      string `json:"org"`
 	}
 	if !decodeJSON(w, r, &in) {
 		return
@@ -61,6 +65,11 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	org, ok := s.portalOrg(w, r, in.Org)
+	if !ok {
+		return
+	}
+
 	hash, err := auth.HashPassword(in.Password)
 	if err != nil {
 		internalError(w, err)
@@ -69,10 +78,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 
 	// El registro público siempre crea clientes; los agentes los asigna un administrador.
 	u, err := scanUser(s.db.QueryRow(r.Context(), `
-		INSERT INTO users (name, email, password_hash, role)
-		VALUES ($1, $2, $3, 'customer')
+		INSERT INTO users (name, email, password_hash, role, org_id)
+		VALUES ($1, $2, $3, 'customer', $4)
 		RETURNING `+userColumns,
-		in.Name, in.Email, hash))
+		in.Name, in.Email, hash, org.ID))
 	if isUniqueViolation(err) {
 		writeError(w, http.StatusConflict, "ese email ya está registrado")
 		return
@@ -85,10 +94,19 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	s.respondWithToken(w, http.StatusCreated, u)
 }
 
+// orgChoice es una empresa entre las que el email tiene cuenta, para elegir al iniciar sesión.
+type orgChoice struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+// login inicia sesión. Si el email y la contraseña coinciden en varias empresas y no se indica
+// cuál (campo org), responde 409 con la lista para que la persona elija.
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Org      string `json:"org"`
 	}
 	if !decodeJSON(w, r, &in) {
 		return
@@ -102,28 +120,94 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var u User
-	var hash string
-	err := s.db.QueryRow(r.Context(), `
-		SELECT `+userColumns+`, password_hash FROM users WHERE lower(email) = lower($1)`,
-		strings.TrimSpace(in.Email),
-	).Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.EmailNotifications, &u.CreatedAt, &hash)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	rows, err := s.db.Query(r.Context(), `
+		SELECT `+prefixed("u.", userColumns)+`, u.password_hash, o.slug, o.name, o.suspended
+		FROM users u JOIN organizations o ON o.id = u.org_id
+		WHERE lower(u.email) = lower($1) AND ($2 = '' OR o.slug = $2)
+		ORDER BY o.id`,
+		strings.TrimSpace(in.Email), strings.ToLower(strings.TrimSpace(in.Org)))
+	if err != nil {
 		internalError(w, err)
 		return
 	}
-	if err != nil || !auth.CheckPassword(hash, in.Password) {
+	type candidate struct {
+		user      User
+		org       orgChoice
+		suspended bool
+	}
+	var matches []candidate
+	for rows.Next() {
+		var c candidate
+		var hash string
+		u := &c.user
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Active, &u.EmailNotifications, &u.CreatedAt, &u.OrgID,
+			&hash, &c.org.Slug, &c.org.Name, &c.suspended); err != nil {
+			rows.Close()
+			internalError(w, err)
+			return
+		}
+		// Se comprueba la contraseña de cada cuenta: así solo se revelan las empresas de quien la sabe.
+		if auth.CheckPassword(hash, in.Password) {
+			u.Permanent = isPermanentAdmin(*u)
+			matches = append(matches, c)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		internalError(w, err)
+		return
+	}
+	if len(matches) == 0 {
+		// Mismo costo de bcrypt aunque el email no exista, para no revelar qué cuentas hay.
+		auth.CheckPassword(dummyHash, in.Password)
 		s.loginLock.Fail(key)
 		writeError(w, http.StatusUnauthorized, "email o contraseña incorrectos")
 		return
 	}
-
 	s.loginLock.Reset(key)
-	if !u.Active {
+	if len(matches) > 1 {
+		choices := make([]orgChoice, len(matches))
+		for i, m := range matches {
+			choices[i] = m.org
+		}
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":         "tienes cuenta en varias empresas: elige a cuál entrar",
+			"organizations": choices,
+		})
+		return
+	}
+
+	m := matches[0]
+	if m.suspended {
+		writeError(w, http.StatusForbidden, "la cuenta de esta empresa está suspendida; escríbenos para reactivarla")
+		return
+	}
+	if !m.user.Active {
 		writeError(w, http.StatusForbidden, "esta cuenta está desactivada; habla con un administrador")
 		return
 	}
-	s.respondWithToken(w, http.StatusOK, u)
+	// Una sesión por agente: entrar cierra las sesiones de otros dispositivos.
+	// Así una licencia de agente no se comparte entre varias personas.
+	if m.user.Role == auth.RoleAgent || m.user.Role == auth.RoleAdmin {
+		if _, err := s.db.Exec(r.Context(),
+			`UPDATE users SET tokens_valid_after = date_trunc('second', now()) WHERE id = $1`, m.user.ID); err != nil {
+			internalError(w, err)
+			return
+		}
+	}
+	s.respondWithToken(w, http.StatusOK, m.user)
+}
+
+// dummyHash iguala el tiempo de respuesta cuando el email no existe.
+var dummyHash, _ = auth.HashPassword("micolmena-no-existe")
+
+// prefixed antepone un alias a cada columna de una lista: "id, name" → "u.id, u.name".
+func prefixed(alias, columns string) string {
+	parts := strings.Split(columns, ",")
+	for i, p := range parts {
+		parts[i] = alias + strings.TrimSpace(p)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (s *Server) respondWithToken(w http.ResponseWriter, status int, u User) {
@@ -162,11 +246,12 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	all := r.URL.Query().Get("active") == "all"
 	rows, err := s.db.Query(r.Context(), `
 		SELECT `+userColumns+` FROM users
-		WHERE ($1 = '' OR role = $1)
+		WHERE org_id = $4
+		  AND ($1 = '' OR role = $1)
 		  AND ($2 OR active)
 		  AND ($3 = '' OR name ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%')
 		ORDER BY active DESC, name
-		LIMIT 500`, role, all, escapeLike(search))
+		LIMIT 500`, role, all, escapeLike(search), claimsFrom(r).OrgID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -201,7 +286,7 @@ func (s *Server) updateUserRole(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "no puedes quitarte el rol de administrador")
 		return
 	}
-	if msg, err := s.permanentChange(r.Context(), claimsFrom(r).UserID(), id, &in.Role, nil, nil, nil); err != nil {
+	if msg, err := s.permanentChange(r.Context(), claimsFrom(r).OrgID, claimsFrom(r).UserID(), id, &in.Role, nil, nil, nil); err != nil {
 		internalError(w, err)
 		return
 	} else if msg != "" {
@@ -209,8 +294,24 @@ func (s *Server) updateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := scanUser(s.db.QueryRow(r.Context(),
-		`UPDATE users SET role = $2 WHERE id = $1 RETURNING `+userColumns, id, in.Role))
+	orgID := claimsFrom(r).OrgID
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if isStaffRole(in.Role) {
+		if msg, err := agentLimit(r.Context(), tx, orgID, id); err != nil {
+			internalError(w, err)
+			return
+		} else if msg != "" {
+			validationErrors{"role": msg}.write(w)
+			return
+		}
+	}
+	u, err := scanUser(tx.QueryRow(r.Context(),
+		`UPDATE users SET role = $2 WHERE id = $1 AND org_id = $3 RETURNING `+userColumns, id, in.Role, orgID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "usuario no encontrado")
 		return
@@ -219,8 +320,14 @@ func (s *Server) updateUserRole(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	if err := tx.Commit(r.Context()); err != nil {
+		internalError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, u)
 }
+
+func isStaffRole(role string) bool { return role == auth.RoleAgent || role == auth.RoleAdmin }
 
 func validRole(role string) bool {
 	return role == auth.RoleAdmin || role == auth.RoleAgent || role == auth.RoleCustomer
@@ -272,15 +379,35 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	u, err := scanUser(s.db.QueryRow(r.Context(), `
-		INSERT INTO users (name, email, password_hash, role)
-		VALUES ($1, $2, $3, $4)
-		RETURNING `+userColumns, in.Name, in.Email, hash, in.Role))
+	orgID := claimsFrom(r).OrgID
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if isStaffRole(in.Role) {
+		if msg, err := agentLimit(r.Context(), tx, orgID, 0); err != nil {
+			internalError(w, err)
+			return
+		} else if msg != "" {
+			validationErrors{"role": msg}.write(w)
+			return
+		}
+	}
+	u, err := scanUser(tx.QueryRow(r.Context(), `
+		INSERT INTO users (name, email, password_hash, role, org_id)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING `+userColumns, in.Name, in.Email, hash, in.Role, orgID))
 	if isUniqueViolation(err) {
 		validationErrors{"email": "ese email ya está registrado"}.write(w)
 		return
 	}
 	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		internalError(w, err)
 		return
 	}
@@ -348,7 +475,7 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 	if errs.write(w) {
 		return
 	}
-	if msg, err := s.permanentChange(r.Context(), claimsFrom(r).UserID(), id, in.Role, in.Active, in.Email, in.Password); err != nil {
+	if msg, err := s.permanentChange(r.Context(), claimsFrom(r).OrgID, claimsFrom(r).UserID(), id, in.Role, in.Active, in.Email, in.Password); err != nil {
 		internalError(w, err)
 		return
 	} else if msg != "" {
@@ -363,13 +490,48 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
+	orgID := claimsFrom(r).OrgID
+	// Si el cambio deja a la persona como agente activo, debe caber en el plan.
+	var before User
+	before, err = scanUser(tx.QueryRow(r.Context(),
+		`SELECT `+userColumns+` FROM users WHERE id = $1 AND org_id = $2`, id, orgID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "usuario no encontrado")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	role, active := before.Role, before.Active
+	if in.Role != nil {
+		role = *in.Role
+	}
+	if in.Active != nil {
+		active = *in.Active
+	}
+	if isStaffRole(role) && active && !(isStaffRole(before.Role) && before.Active) {
+		if msg, err := agentLimit(r.Context(), tx, orgID, id); err != nil {
+			internalError(w, err)
+			return
+		} else if msg != "" {
+			field := "role"
+			if in.Role == nil {
+				field = "active"
+			}
+			validationErrors{field: msg}.write(w)
+			return
+		}
+	}
+
 	var u User
 	if len(sets) == 0 {
-		u, err = scanUser(tx.QueryRow(r.Context(), `SELECT `+userColumns+` FROM users WHERE id = $1`, id))
+		u = before
 	} else {
-		args = append(args, id)
+		args = append(args, id, orgID)
 		u, err = scanUser(tx.QueryRow(r.Context(),
-			`UPDATE users SET `+strings.Join(sets, ", ")+` WHERE id = $`+strconv.Itoa(len(args))+` RETURNING `+userColumns,
+			`UPDATE users SET `+strings.Join(sets, ", ")+` WHERE id = $`+strconv.Itoa(len(args)-1)+
+				` AND org_id = $`+strconv.Itoa(len(args))+` RETURNING `+userColumns,
 			args...))
 	}
 	if errors.Is(err, pgx.ErrNoRows) {

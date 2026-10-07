@@ -17,6 +17,7 @@ type broker struct {
 }
 
 type subscriber struct {
+	orgID  int64
 	userID int64
 	staff  bool
 	ch     chan []byte
@@ -26,8 +27,8 @@ func newBroker() *broker {
 	return &broker{subs: map[*subscriber]struct{}{}}
 }
 
-func (b *broker) subscribe(userID int64, staff bool) *subscriber {
-	s := &subscriber{userID: userID, staff: staff, ch: make(chan []byte, 32)}
+func (b *broker) subscribe(orgID, userID int64, staff bool) *subscriber {
+	s := &subscriber{orgID: orgID, userID: userID, staff: staff, ch: make(chan []byte, 32)}
 	b.mu.Lock()
 	b.subs[s] = struct{}{}
 	b.mu.Unlock()
@@ -62,7 +63,8 @@ func (b *broker) publish(f fanout) {
 	}
 	for s := range b.subs {
 		for _, t := range f.tickets {
-			if s.staff || (!t.staffOnly && s.userID == t.requester) {
+			// El equipo de otra empresa nunca recibe avisos de estos tickets.
+			if (s.staff && s.orgID == t.org) || (!t.staffOnly && s.userID == t.requester) {
 				send(s, streamEvent{Type: "ticket", TicketID: t.id})
 			}
 		}
@@ -85,7 +87,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 	_ = rc.SetWriteDeadline(time.Time{})
 
 	claims := claimsFrom(r)
-	sub := s.broker.subscribe(claims.UserID(), claims.IsStaff())
+	sub := s.broker.subscribe(claims.OrgID, claims.UserID(), claims.IsStaff())
 	defer s.broker.unsubscribe(sub)
 
 	w.Header().Set("Content-Type", "text/event-stream")

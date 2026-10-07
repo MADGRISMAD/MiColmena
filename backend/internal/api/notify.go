@@ -16,6 +16,7 @@ type fanout struct {
 }
 
 type ticketChange struct {
+	org       int64
 	id        int64
 	requester int64
 	// staffOnly: el cambio no lo debe notar el cliente (por ejemplo, una nota interna).
@@ -23,7 +24,7 @@ type ticketChange struct {
 }
 
 func (f *fanout) ticket(t Ticket, staffOnly bool) {
-	f.tickets = append(f.tickets, ticketChange{id: t.ID, requester: t.Requester.ID, staffOnly: staffOnly})
+	f.tickets = append(f.tickets, ticketChange{org: t.OrgID, id: t.ID, requester: t.Requester.ID, staffOnly: staffOnly})
 }
 
 // notification es un aviso para un usuario: en la campana y, si lo quiere, por correo.
@@ -86,7 +87,7 @@ func (s *Server) actorName(ctx context.Context, q querier, id int64) string {
 
 // notifyNewTicket avisa a todo el equipo, y al cliente si un agente abrió el ticket en su nombre.
 func (s *Server) notifyNewTicket(ctx context.Context, q querier, out *fanout, actorID int64, t Ticket) error {
-	rows, err := q.Query(ctx, `SELECT id FROM users WHERE active AND role IN ('agent', 'admin')`)
+	rows, err := q.Query(ctx, `SELECT id FROM users WHERE org_id = $1 AND active AND role IN ('agent', 'admin')`, t.OrgID)
 	if err != nil {
 		return err
 	}
@@ -180,7 +181,7 @@ func (s *Server) notifyComment(ctx context.Context, q querier, out *fanout, auth
 	}
 
 	if author.staff {
-		mentioned, err := mentionedStaff(ctx, q, c.Body)
+		mentioned, err := mentionedStaff(ctx, q, t.OrgID, c.Body)
 		if err != nil {
 			return err
 		}
@@ -217,13 +218,13 @@ type actorInfo struct {
 
 // mentionedStaff busca "@Nombre" de agentes y administradores activos en el texto.
 // Se comparan nombres completos para no confundir a "@Ana" con "@Ana María".
-func mentionedStaff(ctx context.Context, q querier, body string) ([]int64, error) {
+func mentionedStaff(ctx context.Context, q querier, orgID int64, body string) ([]int64, error) {
 	if !strings.Contains(body, "@") {
 		return nil, nil
 	}
 	rows, err := q.Query(ctx, `
-		SELECT id, name FROM users WHERE active AND role IN ('agent', 'admin')
-		ORDER BY length(name) DESC`)
+		SELECT id, name FROM users WHERE org_id = $1 AND active AND role IN ('agent', 'admin')
+		ORDER BY length(name) DESC`, orgID)
 	if err != nil {
 		return nil, err
 	}

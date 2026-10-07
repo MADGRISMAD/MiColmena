@@ -17,7 +17,8 @@ type SLAPolicy struct {
 func (s *Server) listSLA(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.Query(r.Context(), `
 		SELECT priority, first_response_minutes, resolution_minutes FROM sla_policies
-		ORDER BY array_position(ARRAY['urgent', 'high', 'medium', 'low'], priority)`)
+		WHERE org_id = $1
+		ORDER BY array_position(ARRAY['urgent', 'high', 'medium', 'low'], priority)`, claimsFrom(r).OrgID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -63,8 +64,9 @@ func (s *Server) updateSLA(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(r.Context())
 	for _, p := range in.Items {
 		if _, err := tx.Exec(r.Context(), `
-			UPDATE sla_policies SET first_response_minutes = $2, resolution_minutes = $3 WHERE priority = $1`,
-			p.Priority, p.FirstResponseMinutes, p.ResolutionMinutes); err != nil {
+			UPDATE sla_policies SET first_response_minutes = $2, resolution_minutes = $3
+			WHERE priority = $1 AND org_id = $4`,
+			p.Priority, p.FirstResponseMinutes, p.ResolutionMinutes, claimsFrom(r).OrgID); err != nil {
 			internalError(w, err)
 			return
 		}

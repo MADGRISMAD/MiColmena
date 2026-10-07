@@ -113,6 +113,7 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	orgID := claimsFrom(r).OrgID
 	resp := reportResponse{
 		From: rr.from.Format("2006-01-02"),
 		To:   rr.to.AddDate(0, 0, -1).Format("2006-01-02"),
@@ -120,19 +121,19 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 
 	err := s.db.QueryRow(ctx, `
 		SELECT
-			(SELECT count(*) FROM tickets WHERE created_at >= $1 AND created_at < $2),
-			(SELECT count(*) FROM tickets WHERE resolved_at >= $1 AND resolved_at < $2),
+			(SELECT count(*) FROM tickets WHERE org_id = $3 AND created_at >= $1 AND created_at < $2),
+			(SELECT count(*) FROM tickets WHERE org_id = $3 AND resolved_at >= $1 AND resolved_at < $2),
 			(SELECT avg(extract(epoch FROM first_response_at - created_at) / 3600)
-			 FROM tickets WHERE first_response_at >= $1 AND first_response_at < $2),
+			 FROM tickets WHERE org_id = $3 AND first_response_at >= $1 AND first_response_at < $2),
 			(SELECT avg(extract(epoch FROM resolved_at - created_at) / 3600)
-			 FROM tickets WHERE resolved_at >= $1 AND resolved_at < $2),
+			 FROM tickets WHERE org_id = $3 AND resolved_at >= $1 AND resolved_at < $2),
 			(SELECT avg(CASE WHEN t.first_response_at <= t.created_at + p.first_response_minutes * interval '1 minute'
 			                 THEN 1.0 ELSE 0.0 END)
-			 FROM tickets t JOIN sla_policies p ON p.priority = t.priority
-			 WHERE t.first_response_at >= $1 AND t.first_response_at < $2),
-			(SELECT count(*) FROM tickets WHERE satisfaction = 'good' AND rated_at >= $1 AND rated_at < $2),
-			(SELECT count(*) FROM tickets WHERE satisfaction = 'bad' AND rated_at >= $1 AND rated_at < $2)`,
-		rr.from, rr.to,
+			 FROM tickets t JOIN sla_policies p ON p.org_id = t.org_id AND p.priority = t.priority
+			 WHERE t.org_id = $3 AND t.first_response_at >= $1 AND t.first_response_at < $2),
+			(SELECT count(*) FROM tickets WHERE org_id = $3 AND satisfaction = 'good' AND rated_at >= $1 AND rated_at < $2),
+			(SELECT count(*) FROM tickets WHERE org_id = $3 AND satisfaction = 'bad' AND rated_at >= $1 AND rated_at < $2)`,
+		rr.from, rr.to, orgID,
 	).Scan(&resp.Created, &resp.Resolved, &resp.AvgFirstResponseHours, &resp.AvgResolutionHours,
 		&resp.FirstResponseSLAMet, &resp.Good, &resp.Bad)
 	if err != nil {
@@ -146,9 +147,9 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 			                       ($2::timestamptz AT TIME ZONE $3)::date - 1, interval '1 day')::date AS day
 		)
 		SELECT to_char(d.day, 'YYYY-MM-DD'),
-		       (SELECT count(*) FROM tickets WHERE (created_at AT TIME ZONE $3)::date = d.day),
-		       (SELECT count(*) FROM tickets WHERE (resolved_at AT TIME ZONE $3)::date = d.day)
-		FROM days d ORDER BY d.day`, rr.from, rr.to, rr.tz)
+		       (SELECT count(*) FROM tickets WHERE org_id = $4 AND (created_at AT TIME ZONE $3)::date = d.day),
+		       (SELECT count(*) FROM tickets WHERE org_id = $4 AND (resolved_at AT TIME ZONE $3)::date = d.day)
+		FROM days d ORDER BY d.day`, rr.from, rr.to, rr.tz, orgID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -168,9 +169,9 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 		       count(*) FILTER (WHERE t.satisfaction = 'bad')
 		FROM users u
 		LEFT JOIN tickets t ON t.assignee_id = u.id AND t.resolved_at >= $1 AND t.resolved_at < $2
-		WHERE u.role IN ('agent', 'admin') AND u.active
+		WHERE u.org_id = $3 AND u.role IN ('agent', 'admin') AND u.active
 		GROUP BY u.id, u.name
-		ORDER BY count(t.id) DESC, u.name`, rr.from, rr.to)
+		ORDER BY count(t.id) DESC, u.name`, rr.from, rr.to, orgID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -183,9 +184,9 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 
 	rows, err = s.db.Query(ctx, `
 		SELECT CASE WHEN category = '' THEN 'Sin categoría' ELSE category END, count(*)
-		FROM tickets WHERE created_at >= $1 AND created_at < $2
+		FROM tickets WHERE org_id = $3 AND created_at >= $1 AND created_at < $2
 		GROUP BY 1 ORDER BY 2 DESC, 1
-		LIMIT 20`, rr.from, rr.to)
+		LIMIT 20`, rr.from, rr.to, orgID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -212,9 +213,9 @@ func (s *Server) exportTickets(w http.ResponseWriter, r *http.Request) {
 	}
 	loc, _ := time.LoadLocation(rr.tz)
 	rows, err := s.db.Query(r.Context(), ticketSelect+`
-		WHERE t.created_at >= $1 AND t.created_at < $2
+		WHERE t.org_id = $3 AND t.created_at >= $1 AND t.created_at < $2
 		ORDER BY t.id
-		LIMIT 50000`, rr.from, rr.to)
+		LIMIT 50000`, rr.from, rr.to, claimsFrom(r).OrgID)
 	if err != nil {
 		internalError(w, err)
 		return

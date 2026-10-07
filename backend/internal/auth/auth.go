@@ -19,6 +19,8 @@ const (
 // Claims es lo que viaja dentro del token.
 type Claims struct {
 	Role string `json:"role"`
+	// OrgID no viaja en el token: la API lo lee de la base de datos en cada petición.
+	OrgID int64 `json:"-"`
 	jwt.RegisteredClaims
 }
 

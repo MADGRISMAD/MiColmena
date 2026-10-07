@@ -25,7 +25,8 @@ type Macro struct {
 const macroColumns = `id, title, body, status, internal, created_at, updated_at`
 
 func (s *Server) listMacros(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.db.Query(r.Context(), `SELECT `+macroColumns+` FROM macros ORDER BY lower(title)`)
+	rows, err := s.db.Query(r.Context(),
+		`SELECT `+macroColumns+` FROM macros WHERE org_id = $1 ORDER BY lower(title)`, claimsFrom(r).OrgID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -69,9 +70,9 @@ func (s *Server) createMacro(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m, err := scanMacro(s.db.QueryRow(r.Context(), `
-		INSERT INTO macros (title, body, status, internal, created_by)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING `+macroColumns, in.Title, in.Body, in.Status, in.Internal, claimsFrom(r).UserID()))
+		INSERT INTO macros (title, body, status, internal, created_by, org_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING `+macroColumns, in.Title, in.Body, in.Status, in.Internal, claimsFrom(r).UserID(), claimsFrom(r).OrgID))
 	if err != nil {
 		internalError(w, err)
 		return
@@ -90,8 +91,8 @@ func (s *Server) updateMacro(w http.ResponseWriter, r *http.Request) {
 	}
 	m, err := scanMacro(s.db.QueryRow(r.Context(), `
 		UPDATE macros SET title = $2, body = $3, status = $4, internal = $5, updated_at = now()
-		WHERE id = $1
-		RETURNING `+macroColumns, id, in.Title, in.Body, in.Status, in.Internal))
+		WHERE id = $1 AND org_id = $6
+		RETURNING `+macroColumns, id, in.Title, in.Body, in.Status, in.Internal, claimsFrom(r).OrgID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "respuesta guardada no encontrada")
 		return
@@ -108,7 +109,7 @@ func (s *Server) deleteMacro(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tag, err := s.db.Exec(r.Context(), `DELETE FROM macros WHERE id = $1`, id)
+	tag, err := s.db.Exec(r.Context(), `DELETE FROM macros WHERE id = $1 AND org_id = $2`, id, claimsFrom(r).OrgID)
 	if err != nil {
 		internalError(w, err)
 		return

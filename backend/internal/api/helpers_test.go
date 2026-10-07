@@ -43,6 +43,8 @@ func passwordHash(t testing.TB) string {
 
 // env es una API completa con su propio esquema de PostgreSQL.
 type env struct {
+	// org es la empresa en la que createUser da de alta usuarios (0 = la de la plataforma).
+	org     int64
 	t       testing.TB
 	pool    *pgxpool.Pool
 	handler http.Handler
@@ -167,8 +169,8 @@ func (e *env) createUser(name, email, role string) actor {
 	e.t.Helper()
 	var id int64
 	err := e.pool.QueryRow(context.Background(), `
-		INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id`,
-		name, email, passwordHash(e.t), role).Scan(&id)
+		INSERT INTO users (name, email, password_hash, role, org_id) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		name, email, passwordHash(e.t), role, e.orgID()).Scan(&id)
 	if err != nil {
 		e.t.Fatalf("crear usuario %s: %v", email, err)
 	}
@@ -278,4 +280,11 @@ func mustExec(t testing.TB, e *env, sql string, args ...any) {
 	if _, err := e.pool.Exec(context.Background(), sql, args...); err != nil {
 		t.Fatalf("%s: %v", sql, err)
 	}
+}
+
+func (e *env) orgID() int64 {
+	if e.org == 0 {
+		return 1
+	}
+	return e.org
 }
